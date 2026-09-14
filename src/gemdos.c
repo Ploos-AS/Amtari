@@ -15,10 +15,7 @@ static int read_arg32(const struct amtari_context *ctx, uint32_t offset, uint32_
 int amtari_console_bind(struct amtari_context *ctx, amtari_console_getc_fn getc_fn,
                         amtari_console_putc_fn putc_fn, void *opaque)
 {
-    if (ctx == 0) {
-        return AMTARI_EINVAL;
-    }
-
+    if (ctx == 0) return AMTARI_EINVAL;
     ctx->console.getc = getc_fn;
     ctx->console.putc = putc_fn;
     ctx->console.opaque = opaque;
@@ -29,10 +26,7 @@ static int path_arg(struct amtari_context *ctx, uint32_t offset, char *path, siz
 {
     uint32_t address;
     int rc;
-
-    if (read_arg32(ctx, offset, &address) != 0) {
-        return AMTARI_EFAULT;
-    }
+    if (read_arg32(ctx, offset, &address) != 0) return AMTARI_EFAULT;
     rc = amtari_path_translate(ctx, address, path, path_size);
     return rc;
 }
@@ -40,7 +34,6 @@ static int path_arg(struct amtari_context *ctx, uint32_t offset, char *path, siz
 static int32_t gemdos_cconin(struct amtari_context *ctx)
 {
     int value;
-
     if (ctx->console.getc == 0) return AMTARI_EIO;
     value = ctx->console.getc(ctx->console.opaque);
     return value < 0 ? AMTARI_EIO : (int32_t)(value & 0xff);
@@ -241,11 +234,9 @@ static int32_t gemdos_pexec(struct amtari_context *ctx)
     }
 
     if (mode == 4u) {
-        uint32_t tbase;
-        if (arg2 == 0u || amtari_guest_read32(ctx, arg2 + 0x08u, &tbase) != 0) return AMTARI_EFAULT;
-        ctx->current_basepage = arg2;
-        ctx->cpu.pc = tbase;
-        return 0;
+        uint32_t hitpa;
+        if (arg2 == 0u || amtari_guest_read32(ctx, arg2 + 0x04u, &hitpa) != 0) return AMTARI_EFAULT;
+        return amtari_exec_prepare(ctx, arg2, hitpa);
     }
 
     return AMTARI_ENOSYS;

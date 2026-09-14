@@ -6,7 +6,7 @@ CROSS_OBJCOPY ?= m68k-linux-gnu-objcopy
 CROSS_OBJDUMP ?= m68k-linux-gnu-objdump
 
 BUILD := build
-COMMON_SRC := src/amtari.c src/guest.c src/trap.c src/gemdos.c src/fs.c src/prg.c src/exec_m213.c
+COMMON_SRC := src/amtari.c src/guest.c src/trap.c src/gemdos_m214.c src/fs.c src/prg.c src/exec_m213.c
 TEST_M0 := $(BUILD)/test_m0
 TEST_M1 := $(BUILD)/test_m1
 TEST_M2 := $(BUILD)/test_m2
@@ -33,6 +33,12 @@ M213_PRG := $(BUILD)/m2_13_indexed_movem.prg
 M213_INDEX_OBJ := $(BUILD)/m2_13_indexed.o
 M213_INDEX_TEXT := $(BUILD)/m2_13_indexed.text
 M213_INDEX_PRG := $(BUILD)/m2_13_indexed.prg
+M214_C_OBJ := $(BUILD)/m2_14_globals.o
+M214_START_OBJ := $(BUILD)/m2_14_start.o
+M214_ELF := $(BUILD)/m2_14_globals.elf
+M214_TEXT := $(BUILD)/m2_14_globals.text
+M214_DATA := $(BUILD)/m2_14_globals.data
+M214_PRG := $(BUILD)/m2_14_globals.prg
 
 .PHONY: all check cross-check clean
 
@@ -119,6 +125,24 @@ $(M213_INDEX_TEXT): $(M213_INDEX_OBJ)
 $(M213_INDEX_PRG): $(M213_INDEX_TEXT) tools/make_tos_prg.py
 	python3 tools/make_tos_prg.py $(M213_INDEX_TEXT) $@
 
+$(M214_C_OBJ): tests/fixtures/m2_14_globals.c | $(BUILD)
+	$(CROSS_CC) -m68000 -Os -mpcrel -ffreestanding -fno-pic -fno-pie -fno-stack-protector -fomit-frame-pointer -c $< -o $@
+
+$(M214_START_OBJ): tests/fixtures/m2_14_start.S | $(BUILD)
+	$(CROSS_CC) -m68000 -c $< -o $@
+
+$(M214_ELF): $(M214_START_OBJ) $(M214_C_OBJ) tests/fixtures/m2_14.ld
+	$(CROSS_CC) -m68000 -nostdlib -Wl,--relax -Wl,-T,tests/fixtures/m2_14.ld -Wl,-e,_start -Wl,--build-id=none $(M214_START_OBJ) $(M214_C_OBJ) -o $@
+
+$(M214_TEXT): $(M214_ELF)
+	$(CROSS_OBJCOPY) -O binary -j .text $< $@
+
+$(M214_DATA): $(M214_ELF)
+	$(CROSS_OBJCOPY) -O binary -j .data $< $@
+
+$(M214_PRG): $(M214_TEXT) $(M214_DATA) tools/make_tos_prg_sections.py
+	python3 tools/make_tos_prg_sections.py $(M214_TEXT) $(M214_DATA) $@ --bss 4
+
 check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E) $(TEST_M2_COND) $(TEST_M2_ARITH) $(TEST_M2_ADDR) $(TEST_M2_COMPILER)
 	./$(TEST_M0)
 	./$(TEST_M1)
@@ -131,9 +155,9 @@ check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_E
 	./$(TEST_M2_ARITH)
 	./$(TEST_M2_ADDR)
 	./$(TEST_M2_COMPILER)
-	@echo "M2.13 host regression checks: PASS"
+	@echo "M2.14 host regression checks: PASS"
 
-cross-check: $(CROSS_PRG) $(STRESS_PRG) $(M213_PRG) $(M213_INDEX_PRG) $(TEST_M2_CROSS)
+cross-check: $(CROSS_PRG) $(STRESS_PRG) $(M213_PRG) $(M213_INDEX_PRG) $(M214_PRG) $(TEST_M2_CROSS)
 	@echo "--- M2.11 GCC-generated m68k code ---"
 	$(CROSS_OBJDUMP) -dr $(CROSS_OBJ)
 	./$(TEST_M2_CROSS) $(CROSS_PRG) 42
@@ -146,7 +170,10 @@ cross-check: $(CROSS_PRG) $(STRESS_PRG) $(M213_PRG) $(M213_INDEX_PRG) $(TEST_M2_
 	@echo "--- M2.13 deterministic 68000 indexed-EA code ---"
 	$(CROSS_OBJDUMP) -dr $(M213_INDEX_OBJ)
 	./$(TEST_M2_CROSS) $(M213_INDEX_PRG) 42
-	@echo "M2.13 real MOVEM + 68000 indexed addressing execution: PASS"
+	@echo "--- M2.14 GCC .data/.bss + GEMDOS Pterm code ---"
+	$(CROSS_OBJDUMP) -dr $(M214_ELF)
+	./$(TEST_M2_CROSS) $(M214_PRG) 42
+	@echo "M2.14 sectioned GCC PRG + GEMDOS Pterm execution: PASS"
 
 clean:
 	rm -rf $(BUILD)

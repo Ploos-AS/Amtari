@@ -87,9 +87,8 @@ static void dreg_write(struct amtari_context *ctx, unsigned int reg, unsigned in
 
 static void set_nz(struct amtari_context *ctx, uint32_t value, unsigned int size)
 {
-    uint32_t mask = size_mask(size);
     uint16_t ccr = (uint16_t)(ctx->cpu.sr & CCR_X);
-    value &= mask;
+    value &= size_mask(size);
     if (value == 0u) ccr |= CCR_Z;
     if ((value & size_sign(size)) != 0u) ccr |= CCR_N;
     ctx->cpu.sr = (uint16_t)((ctx->cpu.sr & 0xff00u) | ccr);
@@ -101,7 +100,6 @@ static void set_cmp(struct amtari_context *ctx, uint32_t dst, uint32_t src, unsi
     uint32_t sign = size_sign(size);
     uint32_t result;
     uint16_t ccr = (uint16_t)(ctx->cpu.sr & CCR_X);
-
     dst &= mask;
     src &= mask;
     result = (dst - src) & mask;
@@ -177,7 +175,6 @@ static int ea_read(struct amtari_context *ctx, unsigned int mode, unsigned int r
 {
     uint32_t address;
     uint16_t ext;
-
     if (mode == 0u) {
         *value = dreg_value(ctx, reg, size);
         return 0;
@@ -236,7 +233,6 @@ static int ea_write(struct amtari_context *ctx, unsigned int mode, unsigned int 
 {
     uint32_t address;
     uint16_t ext;
-
     if (mode == 0u) {
         dreg_write(ctx, reg, size, value);
         return 0;
@@ -270,6 +266,41 @@ static int ea_write(struct amtari_context *ctx, unsigned int mode, unsigned int 
         if (amtari_guest_read32(ctx, *ext_pc, &address) != 0) return AMTARI_EFAULT;
         *ext_pc += 4u;
         return write_memory_value(ctx, address, size, value);
+    }
+    return AMTARI_EILLEGAL;
+}
+
+static int ea_control_address(struct amtari_context *ctx, unsigned int mode, unsigned int reg,
+                              uint32_t *ext_pc, uint32_t *address)
+{
+    uint16_t ext;
+    if (mode == 2u) {
+        *address = ctx->cpu.a[reg];
+        return 0;
+    }
+    if (mode == 5u) {
+        if (amtari_guest_read16(ctx, *ext_pc, &ext) != 0) return AMTARI_EFAULT;
+        *ext_pc += 2u;
+        *address = (uint32_t)((int32_t)ctx->cpu.a[reg] + (int32_t)(int16_t)ext);
+        return 0;
+    }
+    if (mode == 7u && reg == 0u) {
+        if (amtari_guest_read16(ctx, *ext_pc, &ext) != 0) return AMTARI_EFAULT;
+        *ext_pc += 2u;
+        *address = (uint32_t)(int32_t)(int16_t)ext;
+        return 0;
+    }
+    if (mode == 7u && reg == 1u) {
+        if (amtari_guest_read32(ctx, *ext_pc, address) != 0) return AMTARI_EFAULT;
+        *ext_pc += 4u;
+        return 0;
+    }
+    if (mode == 7u && reg == 2u) {
+        uint32_t base = *ext_pc;
+        if (amtari_guest_read16(ctx, *ext_pc, &ext) != 0) return AMTARI_EFAULT;
+        *ext_pc += 2u;
+        *address = (uint32_t)((int32_t)base + (int32_t)(int16_t)ext);
+        return 0;
     }
     return AMTARI_EILLEGAL;
 }
@@ -316,24 +347,26 @@ static int condition_true(const struct amtari_context *ctx, unsigned int conditi
     int n = (ctx->cpu.sr & CCR_N) != 0u;
     int z = (ctx->cpu.sr & CCR_Z) != 0u;
     int v = (ctx->cpu.sr & CCR_V) != 0u;
+    int c = (ctx->cpu.sr & CCR_C) != 0u;
     switch (condition) {
+    case 0u: return 1;
+    case 1u: return 0;
+    case 2u: return !c && !z;
+    case 3u: return c || z;
+    case 4u: return !c;
+    case 5u: return c;
     case 6u: return !z;
     case 7u: return z;
+    case 8u: return !v;
+    case 9u: return v;
+    case 10u: return !n;
+    case 11u: return n;
     case 12u: return n == v;
     case 13u: return n != v;
     case 14u: return !z && n == v;
     case 15u: return z || n != v;
     default: return 0;
     }
-}
-
-static int displacement_address(struct amtari_context *ctx, uint32_t pc, unsigned int reg,
-                                uint32_t *address)
-{
-    uint16_t ext;
-    if (amtari_guest_read16(ctx, pc + 2u, &ext) != 0) return AMTARI_EFAULT;
-    *address = (uint32_t)((int32_t)ctx->cpu.a[reg] + (int32_t)(int16_t)ext);
-    return 0;
 }
 
 static int decode_size_bits(uint16_t opcode, unsigned int *size)
@@ -387,22 +420,41 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
-    if ((opcode & 0xf1f8u) == 0x41e8u) {
-        unsigned int src = opcode & 7u;
-        unsigned int dst = (unsigned int)((opcode >> 9) & 7u);
+    if ((opcode & 0xffc0u) == 0x4840u) {
+        unsigned int mode = (unsigned int)((opcode >> 3) & 7u);
+        unsigned int reg = opcode & 7u;
+        uint32_t ext_pc = pc + 2u;
         uint32_t address;
-        if (displacement_address(ctx, pc, src, &address) != 0) return AMTARI_EFAULT;
-        ctx->cpu.a[dst] = address;
-        ctx->cpu.pc = pc + 4u;
+        int rc = ea_control_address(ctx, mode, reg, &ext_pc, &address);
+        if (rc != 0) return rc;
+        if (push32(ctx, address) != 0) return AMTARI_EFAULT;
+        ctx->cpu.pc = ext_pc;
         return AMTARI_EXEC_RUNNING;
     }
 
-    if ((opcode & 0xf1ffu) == 0x41f9u) {
+    if ((opcode & 0xf1c0u) == 0x41c0u) {
+        unsigned int mode = (unsigned int)((opcode >> 3) & 7u);
+        unsigned int reg = opcode & 7u;
         unsigned int dst = (unsigned int)((opcode >> 9) & 7u);
+        uint32_t ext_pc = pc + 2u;
         uint32_t address;
-        if (amtari_guest_read32(ctx, pc + 2u, &address) != 0) return AMTARI_EFAULT;
+        int rc = ea_control_address(ctx, mode, reg, &ext_pc, &address);
+        if (rc != 0) return rc;
         ctx->cpu.a[dst] = address;
-        ctx->cpu.pc = pc + 6u;
+        ctx->cpu.pc = ext_pc;
+        return AMTARI_EXEC_RUNNING;
+    }
+
+    if ((opcode & 0xffc0u) == 0x4e80u) {
+        unsigned int mode = (unsigned int)((opcode >> 3) & 7u);
+        unsigned int reg = opcode & 7u;
+        uint32_t ext_pc = pc + 2u;
+        uint32_t target;
+        int rc = ea_control_address(ctx, mode, reg, &ext_pc, &target);
+        if (rc != 0) return rc;
+        if (branch_target_valid(ctx, target) != 0) return AMTARI_EFAULT;
+        if (push32(ctx, ext_pc) != 0) return AMTARI_EFAULT;
+        ctx->cpu.pc = target;
         return AMTARI_EXEC_RUNNING;
     }
 
@@ -432,9 +484,7 @@ int amtari_exec_step(struct amtari_context *ctx)
     }
 
     if ((opcode & 0xff00u) == 0x4200u) {
-        unsigned int size;
-        unsigned int mode = (unsigned int)((opcode >> 3) & 7u);
-        unsigned int reg = opcode & 7u;
+        unsigned int size, mode = (unsigned int)((opcode >> 3) & 7u), reg = opcode & 7u;
         uint32_t ext_pc = pc + 2u;
         int rc;
         if (decode_size_bits(opcode, &size) != 0 || mode == 1u) return AMTARI_EILLEGAL;
@@ -446,11 +496,8 @@ int amtari_exec_step(struct amtari_context *ctx)
     }
 
     if ((opcode & 0xff00u) == 0x4a00u) {
-        unsigned int size;
-        unsigned int mode = (unsigned int)((opcode >> 3) & 7u);
-        unsigned int reg = opcode & 7u;
-        uint32_t ext_pc = pc + 2u;
-        uint32_t value;
+        unsigned int size, mode = (unsigned int)((opcode >> 3) & 7u), reg = opcode & 7u;
+        uint32_t ext_pc = pc + 2u, value;
         int rc;
         if (decode_size_bits(opcode, &size) != 0 || mode == 1u) return AMTARI_EILLEGAL;
         rc = ea_read(ctx, mode, reg, size, &ext_pc, &value);
@@ -463,18 +510,15 @@ int amtari_exec_step(struct amtari_context *ctx)
     if ((opcode & 0xc000u) == 0u && (opcode & 0x3000u) != 0u) {
         unsigned int top = (unsigned int)((opcode >> 12) & 3u);
         unsigned int size = (top == 1u) ? 1u : (top == 2u) ? 4u : 2u;
-        unsigned int src_mode = (unsigned int)((opcode >> 3) & 7u);
-        unsigned int src_reg = opcode & 7u;
+        unsigned int src_mode = (unsigned int)((opcode >> 3) & 7u), src_reg = opcode & 7u;
         unsigned int dst_mode = (unsigned int)((opcode >> 6) & 7u);
         unsigned int dst_reg = (unsigned int)((opcode >> 9) & 7u);
-        uint32_t ext_pc = pc + 2u;
-        uint32_t value;
+        uint32_t ext_pc = pc + 2u, value;
         int rc = ea_read(ctx, src_mode, src_reg, size, &ext_pc, &value);
         if (rc != 0) return rc;
         if (dst_mode == 1u) {
             if (size == 1u) return AMTARI_EILLEGAL;
-            if (size == 2u) ctx->cpu.a[dst_reg] = (uint32_t)(int32_t)(int16_t)value;
-            else ctx->cpu.a[dst_reg] = value;
+            ctx->cpu.a[dst_reg] = (size == 2u) ? (uint32_t)(int32_t)(int16_t)value : value;
         } else {
             rc = ea_write(ctx, dst_mode, dst_reg, size, &ext_pc, value);
             if (rc != 0) return rc;
@@ -485,10 +529,8 @@ int amtari_exec_step(struct amtari_context *ctx)
     }
 
     if ((opcode & 0xff00u) == 0x0c00u && ((opcode >> 3) & 7u) == 0u) {
-        unsigned int size;
-        unsigned int reg = opcode & 7u;
-        uint32_t ext_pc = pc + 2u;
-        uint32_t value;
+        unsigned int size, reg = opcode & 7u;
+        uint32_t ext_pc = pc + 2u, value;
         if (decode_size_bits(opcode, &size) != 0) return AMTARI_EILLEGAL;
         if (ea_read(ctx, 7u, 4u, size, &ext_pc, &value) != 0) return AMTARI_EFAULT;
         set_cmp(ctx, dreg_value(ctx, reg, size), value, size);
@@ -496,121 +538,107 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
-    if ((opcode & 0xf1f8u) == 0xb000u ||
-        (opcode & 0xf1f8u) == 0xb040u ||
-        (opcode & 0xf1f8u) == 0xb080u) {
-        unsigned int size;
-        unsigned int src = opcode & 7u;
+    if ((opcode & 0xf000u) == 0xb000u) {
+        unsigned int opmode = (unsigned int)((opcode >> 6) & 7u);
+        if (opmode <= 2u) {
+            unsigned int size = (opmode == 0u) ? 1u : (opmode == 1u) ? 2u : 4u;
+            unsigned int mode = (unsigned int)((opcode >> 3) & 7u), reg = opcode & 7u;
+            unsigned int dst = (unsigned int)((opcode >> 9) & 7u);
+            uint32_t ext_pc = pc + 2u, value;
+            int rc = ea_read(ctx, mode, reg, size, &ext_pc, &value);
+            if (rc != 0) return rc;
+            set_cmp(ctx, dreg_value(ctx, dst, size), value, size);
+            ctx->cpu.pc = ext_pc;
+            return AMTARI_EXEC_RUNNING;
+        }
+        if (opmode >= 4u && opmode <= 6u) {
+            unsigned int size = (opmode == 4u) ? 1u : (opmode == 5u) ? 2u : 4u;
+            unsigned int src = (unsigned int)((opcode >> 9) & 7u);
+            unsigned int mode = (unsigned int)((opcode >> 3) & 7u), reg = opcode & 7u;
+            uint32_t ext_pc = pc + 2u, dst, value;
+            int rc = ea_read(ctx, mode, reg, size, &ext_pc, &dst);
+            if (rc != 0) return rc;
+            value = dst ^ dreg_value(ctx, src, size);
+            rc = ea_write(ctx, mode, reg, size, &(uint32_t){pc + 2u}, value);
+            if (rc != 0) return rc;
+            set_nz(ctx, value, size);
+            ctx->cpu.pc = ext_pc;
+            return AMTARI_EXEC_RUNNING;
+        }
+    }
+
+    if ((opcode & 0xf000u) == 0x8000u || (opcode & 0xf000u) == 0xc000u) {
+        unsigned int opmode = (unsigned int)((opcode >> 6) & 7u);
+        if (opmode <= 2u) {
+            unsigned int size = (opmode == 0u) ? 1u : (opmode == 1u) ? 2u : 4u;
+            unsigned int mode = (unsigned int)((opcode >> 3) & 7u), reg = opcode & 7u;
+            unsigned int dst = (unsigned int)((opcode >> 9) & 7u);
+            uint32_t ext_pc = pc + 2u, src, value;
+            int rc = ea_read(ctx, mode, reg, size, &ext_pc, &src);
+            if (rc != 0) return rc;
+            value = ((opcode & 0xf000u) == 0x8000u) ?
+                    (dreg_value(ctx, dst, size) | src) :
+                    (dreg_value(ctx, dst, size) & src);
+            dreg_write(ctx, dst, size, value);
+            set_nz(ctx, value, size);
+            ctx->cpu.pc = ext_pc;
+            return AMTARI_EXEC_RUNNING;
+        }
+    }
+
+    if ((opcode & 0xf000u) == 0xd000u || (opcode & 0xf000u) == 0x9000u) {
+        unsigned int opmode = (unsigned int)((opcode >> 6) & 7u);
         unsigned int dst = (unsigned int)((opcode >> 9) & 7u);
-        if (decode_size_bits(opcode, &size) != 0) return AMTARI_EILLEGAL;
-        set_cmp(ctx, dreg_value(ctx, dst, size), dreg_value(ctx, src, size), size);
-        ctx->cpu.pc = pc + 2u;
-        return AMTARI_EXEC_RUNNING;
+        unsigned int mode = (unsigned int)((opcode >> 3) & 7u), reg = opcode & 7u;
+        if (opmode == 3u || opmode == 7u) {
+            unsigned int size = (opmode == 3u) ? 2u : 4u;
+            uint32_t ext_pc = pc + 2u, src;
+            int rc = ea_read(ctx, mode, reg, size, &ext_pc, &src);
+            if (rc != 0) return rc;
+            if (size == 2u) src = (uint32_t)(int32_t)(int16_t)src;
+            if ((opcode & 0xf000u) == 0xd000u) ctx->cpu.a[dst] += src;
+            else ctx->cpu.a[dst] -= src;
+            ctx->cpu.pc = ext_pc;
+            return AMTARI_EXEC_RUNNING;
+        }
+        if (opmode <= 2u) {
+            unsigned int size = (opmode == 0u) ? 1u : (opmode == 1u) ? 2u : 4u;
+            uint32_t ext_pc = pc + 2u, src, value;
+            int rc = ea_read(ctx, mode, reg, size, &ext_pc, &src);
+            if (rc != 0) return rc;
+            if (size != 4u) return AMTARI_EILLEGAL;
+            if ((opcode & 0xf000u) == 0xd000u) value = add32(ctx, ctx->cpu.d[dst], src);
+            else value = sub32(ctx, ctx->cpu.d[dst], src);
+            ctx->cpu.d[dst] = value;
+            ctx->cpu.pc = ext_pc;
+            return AMTARI_EXEC_RUNNING;
+        }
     }
 
-    if ((opcode & 0xf1f8u) == 0x8000u ||
-        (opcode & 0xf1f8u) == 0x8040u ||
-        (opcode & 0xf1f8u) == 0x8080u) {
-        unsigned int size;
-        unsigned int src = opcode & 7u;
-        unsigned int dst = (unsigned int)((opcode >> 9) & 7u);
-        uint32_t value;
-        if (decode_size_bits(opcode, &size) != 0) return AMTARI_EILLEGAL;
-        value = dreg_value(ctx, dst, size) | dreg_value(ctx, src, size);
-        dreg_write(ctx, dst, size, value);
-        set_nz(ctx, value, size);
-        ctx->cpu.pc = pc + 2u;
-        return AMTARI_EXEC_RUNNING;
-    }
-
-    if ((opcode & 0xf1f8u) == 0xc000u ||
-        (opcode & 0xf1f8u) == 0xc040u ||
-        (opcode & 0xf1f8u) == 0xc080u) {
-        unsigned int size;
-        unsigned int src = opcode & 7u;
-        unsigned int dst = (unsigned int)((opcode >> 9) & 7u);
-        uint32_t value;
-        if (decode_size_bits(opcode, &size) != 0) return AMTARI_EILLEGAL;
-        value = dreg_value(ctx, dst, size) & dreg_value(ctx, src, size);
-        dreg_write(ctx, dst, size, value);
-        set_nz(ctx, value, size);
-        ctx->cpu.pc = pc + 2u;
-        return AMTARI_EXEC_RUNNING;
-    }
-
-    if ((opcode & 0xf1f8u) == 0xb100u ||
-        (opcode & 0xf1f8u) == 0xb140u ||
-        (opcode & 0xf1f8u) == 0xb180u) {
-        unsigned int size;
-        unsigned int src = (unsigned int)((opcode >> 9) & 7u);
-        unsigned int dst = opcode & 7u;
-        uint32_t value;
-        if (decode_size_bits(opcode, &size) != 0) return AMTARI_EILLEGAL;
-        value = dreg_value(ctx, dst, size) ^ dreg_value(ctx, src, size);
-        dreg_write(ctx, dst, size, value);
-        set_nz(ctx, value, size);
-        ctx->cpu.pc = pc + 2u;
-        return AMTARI_EXEC_RUNNING;
-    }
-
-    if ((opcode & 0xf1f8u) == 0xd080u) {
-        unsigned int src = opcode & 7u;
-        unsigned int dst = (unsigned int)((opcode >> 9) & 7u);
-        ctx->cpu.d[dst] = add32(ctx, ctx->cpu.d[dst], ctx->cpu.d[src]);
-        ctx->cpu.pc = pc + 2u;
-        return AMTARI_EXEC_RUNNING;
-    }
-
-    if ((opcode & 0xf1f8u) == 0x9080u) {
-        unsigned int src = opcode & 7u;
-        unsigned int dst = (unsigned int)((opcode >> 9) & 7u);
-        ctx->cpu.d[dst] = sub32(ctx, ctx->cpu.d[dst], ctx->cpu.d[src]);
-        ctx->cpu.pc = pc + 2u;
-        return AMTARI_EXEC_RUNNING;
-    }
-
-    if ((opcode & 0xf1f8u) == 0x5080u) {
-        unsigned int reg = opcode & 7u;
+    if ((opcode & 0xf000u) == 0x5000u && ((opcode >> 6) & 3u) != 3u) {
+        unsigned int size, mode = (unsigned int)((opcode >> 3) & 7u), reg = opcode & 7u;
         uint32_t amount = (uint32_t)((opcode >> 9) & 7u);
+        int is_sub = (opcode & 0x0100u) != 0u;
         if (amount == 0u) amount = 8u;
-        ctx->cpu.d[reg] = add32(ctx, ctx->cpu.d[reg], amount);
-        ctx->cpu.pc = pc + 2u;
-        return AMTARI_EXEC_RUNNING;
-    }
-
-    if ((opcode & 0xf1f8u) == 0x5180u) {
-        unsigned int reg = opcode & 7u;
-        uint32_t amount = (uint32_t)((opcode >> 9) & 7u);
-        if (amount == 0u) amount = 8u;
-        ctx->cpu.d[reg] = sub32(ctx, ctx->cpu.d[reg], amount);
-        ctx->cpu.pc = pc + 2u;
-        return AMTARI_EXEC_RUNNING;
-    }
-
-    if ((opcode & 0xf1f8u) == 0x5048u || (opcode & 0xf1f8u) == 0x5088u) {
-        unsigned int reg = opcode & 7u;
-        uint32_t amount = (uint32_t)((opcode >> 9) & 7u);
-        if (amount == 0u) amount = 8u;
-        ctx->cpu.a[reg] += amount;
-        ctx->cpu.pc = pc + 2u;
-        return AMTARI_EXEC_RUNNING;
-    }
-
-    if ((opcode & 0xf1f8u) == 0x5148u || (opcode & 0xf1f8u) == 0x5188u) {
-        unsigned int reg = opcode & 7u;
-        uint32_t amount = (uint32_t)((opcode >> 9) & 7u);
-        if (amount == 0u) amount = 8u;
-        ctx->cpu.a[reg] -= amount;
-        ctx->cpu.pc = pc + 2u;
-        return AMTARI_EXEC_RUNNING;
+        if (decode_size_bits(opcode, &size) != 0) return AMTARI_EILLEGAL;
+        if (mode == 1u) {
+            if (is_sub) ctx->cpu.a[reg] -= amount;
+            else ctx->cpu.a[reg] += amount;
+            ctx->cpu.pc = pc + 2u;
+            return AMTARI_EXEC_RUNNING;
+        }
+        if (mode == 0u && size == 4u) {
+            if (is_sub) ctx->cpu.d[reg] = sub32(ctx, ctx->cpu.d[reg], amount);
+            else ctx->cpu.d[reg] = add32(ctx, ctx->cpu.d[reg], amount);
+            ctx->cpu.pc = pc + 2u;
+            return AMTARI_EXEC_RUNNING;
+        }
     }
 
     if ((opcode & 0xfff8u) == 0x51c8u) {
         unsigned int reg = opcode & 7u;
-        uint16_t ext;
-        uint16_t low;
-        uint32_t next_pc = pc + 4u;
-        uint32_t target;
+        uint16_t ext, low;
+        uint32_t next_pc = pc + 4u, target;
         if (amtari_guest_read16(ctx, pc + 2u, &ext) != 0) return AMTARI_EFAULT;
         low = (uint16_t)ctx->cpu.d[reg];
         low = (uint16_t)(low - 1u);
@@ -639,27 +667,16 @@ int amtari_exec_step(struct amtari_context *ctx)
 
     if ((opcode & 0xf000u) == 0x6000u) {
         unsigned int condition = (unsigned int)((opcode >> 8) & 0x0fu);
-        if (condition == 6u || condition == 7u || condition == 12u ||
-            condition == 13u || condition == 14u || condition == 15u) {
-            int32_t displacement;
-            uint32_t next_pc, target;
-            if (branch_displacement(ctx, pc, opcode, &displacement, &next_pc) != 0) return AMTARI_EFAULT;
-            if (!condition_true(ctx, condition)) {
-                ctx->cpu.pc = next_pc;
-                return AMTARI_EXEC_RUNNING;
-            }
-            target = (uint32_t)((int32_t)next_pc + displacement);
-            if (branch_target_valid(ctx, target) != 0) return AMTARI_EFAULT;
-            ctx->cpu.pc = target;
+        int32_t displacement;
+        uint32_t next_pc, target;
+        if (condition < 2u) return AMTARI_EILLEGAL;
+        if (branch_displacement(ctx, pc, opcode, &displacement, &next_pc) != 0) return AMTARI_EFAULT;
+        if (!condition_true(ctx, condition)) {
+            ctx->cpu.pc = next_pc;
             return AMTARI_EXEC_RUNNING;
         }
-    }
-
-    if (opcode == 0x4eb9u) {
-        uint32_t target;
-        if (amtari_guest_read32(ctx, pc + 2u, &target) != 0) return AMTARI_EFAULT;
+        target = (uint32_t)((int32_t)next_pc + displacement);
         if (branch_target_valid(ctx, target) != 0) return AMTARI_EFAULT;
-        if (push32(ctx, pc + 6u) != 0) return AMTARI_EFAULT;
         ctx->cpu.pc = target;
         return AMTARI_EXEC_RUNNING;
     }

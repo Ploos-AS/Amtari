@@ -1,12 +1,5 @@
 #include "amtari.h"
 
-static int32_t dispatch_gemdos(struct amtari_context *ctx, uint16_t function)
-{
-    (void)ctx;
-    (void)function;
-    return AMTARI_ENOSYS;
-}
-
 static int32_t dispatch_bios(struct amtari_context *ctx, uint16_t function)
 {
     (void)ctx;
@@ -43,7 +36,7 @@ int32_t amtari_trap_dispatch(struct amtari_context *ctx, unsigned int trap_numbe
 
     switch (amtari_trap_decode(trap_number)) {
     case AMTARI_TRAP_GEMDOS:
-        return dispatch_gemdos(ctx, function);
+        return amtari_gemdos_dispatch(ctx, function);
     case AMTARI_TRAP_BIOS:
         return dispatch_bios(ctx, function);
     case AMTARI_TRAP_XBIOS:

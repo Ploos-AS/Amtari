@@ -121,7 +121,7 @@ int main(void)
     uint32_t heap_before_child;
 
     assert(amtari_init(&ctx) == 0);
-    assert(strcmp(amtari_version(), "0.2.20-m2") == 0);
+    assert(strcmp(amtari_version(), "0.2.21-m2") == 0);
     assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
     assert(amtari_program_bind(&ctx, fetch_program, &fixture) == 0);
 
@@ -161,29 +161,31 @@ int main(void)
     assert(b == 0x1020);
     assert(ctx.heap_top == 0x1050u);
 
-    /* M2.20 splits a larger free block instead of consuming it whole. */
     assert(call_mfree(memory, &ctx, (uint32_t)a) == 0);
     c = call_malloc(memory, &ctx, 16u);
     assert(c == a);
     assert(call_malloc(memory, &ctx, 16u) == 0x1010);
 
-    /* Tail shrink remains reusable without growing the heap unnecessarily. */
     assert(call_mshrink(memory, &ctx, (uint32_t)b, 16u) == 0);
     assert(ctx.heap_top == 0x1030u);
     d = call_malloc(memory, &ctx, 32u);
     assert(d == 0x1030);
     assert(ctx.heap_top == 0x1050u);
 
-    /* Free three adjacent allocations in non-address order. Coalescing must
-     * reconstruct one 48-byte hole which can satisfy one allocation exactly. */
     assert(call_mfree(memory, &ctx, 0x1010u) == 0);
     assert(call_mfree(memory, &ctx, (uint32_t)b) == 0);
     assert(call_mfree(memory, &ctx, (uint32_t)c) == 0);
     merged = call_malloc(memory, &ctx, 48u);
     assert(merged == 0x1000);
 
-    /* Active parent heap must move Pexec above heap_top. LEAF has no absolute
-     * guest pointers, so it can execute correctly at the relocated basepage. */
+    /* M2.21 process ownership: another basepage may observe the address but
+     * must not free or shrink a block owned by the parent process. */
+    ctx.current_basepage = 0x0900u;
+    assert(call_mfree(memory, &ctx, (uint32_t)merged) == AMTARI_EACCES);
+    assert(call_mshrink(memory, &ctx, (uint32_t)merged, 16u) == AMTARI_EACCES);
+    ctx.current_basepage = 0x0800u;
+    assert(call_mshrink(memory, &ctx, (uint32_t)merged, 32u) == 0);
+
     heap_before_child = ctx.heap_top;
     setup_pexec(memory, &ctx, 0x0120u);
     rc = amtari_gemdos_dispatch(&ctx, 0x4bu);

@@ -3,6 +3,32 @@
 
 #include "amtari.h"
 
+struct console_fixture {
+    int input;
+    int output_count;
+    unsigned char output;
+};
+
+static int console_getc(void *opaque)
+{
+    struct console_fixture *fixture = (struct console_fixture *)opaque;
+    return fixture->input;
+}
+
+static int console_putc(void *opaque, unsigned char ch)
+{
+    struct console_fixture *fixture = (struct console_fixture *)opaque;
+    fixture->output = ch;
+    ++fixture->output_count;
+    return 0;
+}
+
+static void put16(uint8_t *memory, uint32_t address, uint16_t value)
+{
+    memory[address] = (uint8_t)(value >> 8);
+    memory[address + 1u] = (uint8_t)value;
+}
+
 static void test_guest_memory(void)
 {
     struct amtari_context ctx = {0};
@@ -38,9 +64,41 @@ static void test_traps(void)
     assert(amtari_trap_dispatch(&ctx, 2, 0) == AMTARI_ENOSYS);
 }
 
+static void test_bios_console_and_drvmap(void)
+{
+    struct amtari_context ctx = {0};
+    struct console_fixture fixture = {0x41, 0, 0};
+    uint8_t memory[64] = {0};
+
+    assert(amtari_init(&ctx) == 0);
+    assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
+    assert(amtari_console_bind(&ctx, console_getc, console_putc, &fixture) == 0);
+
+    ctx.cpu.a[7] = 0x10u;
+
+    put16(memory, 0x10u, 0x0002u);
+    put16(memory, 0x12u, 0x0002u);
+    assert(amtari_trap_dispatch(&ctx, 13u, 0x02u) == 0x41);
+
+    put16(memory, 0x10u, 0x0003u);
+    put16(memory, 0x12u, 0x0002u);
+    put16(memory, 0x14u, 0x005au);
+    assert(amtari_trap_dispatch(&ctx, 13u, 0x03u) == 0);
+    assert(fixture.output_count == 1);
+    assert(fixture.output == (unsigned char)'Z');
+
+    put16(memory, 0x12u, 0x0001u);
+    assert(amtari_trap_dispatch(&ctx, 13u, 0x02u) == AMTARI_ENOSYS);
+    assert(amtari_trap_dispatch(&ctx, 13u, 0x03u) == AMTARI_ENOSYS);
+
+    assert(amtari_fs_set_drives(&ctx, 0x00000005u, 0u) == 0);
+    assert(amtari_trap_dispatch(&ctx, 13u, 0x0au) == 5);
+}
+
 int main(void)
 {
     test_guest_memory();
     test_traps();
+    test_bios_console_and_drvmap();
     return 0;
 }

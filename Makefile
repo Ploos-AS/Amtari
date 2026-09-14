@@ -1,6 +1,9 @@
 CC ?= cc
 CFLAGS ?= -std=c99 -Wall -Wextra -Werror -pedantic -O2
 CPPFLAGS ?= -Iinclude
+CROSS_CC ?= m68k-linux-gnu-gcc
+CROSS_OBJCOPY ?= m68k-linux-gnu-objcopy
+CROSS_OBJDUMP ?= m68k-linux-gnu-objdump
 
 BUILD := build
 COMMON_SRC := src/amtari.c src/guest.c src/trap.c src/gemdos.c src/fs.c src/prg.c src/exec.c
@@ -15,8 +18,12 @@ TEST_M2_COND := $(BUILD)/test_m2_cond
 TEST_M2_ARITH := $(BUILD)/test_m2_arith
 TEST_M2_ADDR := $(BUILD)/test_m2_addressing
 TEST_M2_COMPILER := $(BUILD)/test_m2_compiler
+TEST_M2_CROSS := $(BUILD)/test_m2_cross
+CROSS_OBJ := $(BUILD)/m2_11_real.o
+CROSS_TEXT := $(BUILD)/m2_11_real.text
+CROSS_PRG := $(BUILD)/m2_11_real.prg
 
-.PHONY: all check clean
+.PHONY: all check cross-check clean
 
 all: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E) $(TEST_M2_COND) $(TEST_M2_ARITH) $(TEST_M2_ADDR) $(TEST_M2_COMPILER)
 
@@ -56,6 +63,18 @@ $(TEST_M2_ADDR): $(COMMON_SRC) tests/test_m2_addressing.c include/amtari.h | $(B
 $(TEST_M2_COMPILER): $(COMMON_SRC) tests/test_m2_compiler.c include/amtari.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m2_compiler.c -o $(TEST_M2_COMPILER)
 
+$(TEST_M2_CROSS): $(COMMON_SRC) tests/test_m2_cross.c include/amtari.h | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m2_cross.c -o $(TEST_M2_CROSS)
+
+$(CROSS_OBJ): tests/fixtures/m2_11_real.c | $(BUILD)
+	$(CROSS_CC) -m68000 -Os -ffreestanding -fno-pic -fno-pie -fno-stack-protector -fomit-frame-pointer -c $< -o $@
+
+$(CROSS_TEXT): $(CROSS_OBJ)
+	$(CROSS_OBJCOPY) -O binary -j .text $< $@
+
+$(CROSS_PRG): $(CROSS_TEXT) tools/make_tos_prg.py
+	python3 tools/make_tos_prg.py $(CROSS_TEXT) $@
+
 check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E) $(TEST_M2_COND) $(TEST_M2_ARITH) $(TEST_M2_ADDR) $(TEST_M2_COMPILER)
 	./$(TEST_M0)
 	./$(TEST_M1)
@@ -69,6 +88,12 @@ check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_E
 	./$(TEST_M2_ADDR)
 	./$(TEST_M2_COMPILER)
 	@echo "M2.10 compiler-oriented byte/word/logical host checks: PASS"
+
+cross-check: $(CROSS_PRG) $(TEST_M2_CROSS)
+	@echo "--- GCC-generated m68k code ---"
+	$(CROSS_OBJDUMP) -dr $(CROSS_OBJ)
+	./$(TEST_M2_CROSS) $(CROSS_PRG)
+	@echo "M2.11 real cross-compiled C PRG execution: PASS"
 
 clean:
 	rm -rf $(BUILD)

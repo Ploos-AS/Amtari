@@ -35,6 +35,17 @@ int amtari_clock_bind(struct amtari_context *ctx, amtari_clock_get_fn get_fn, vo
 {
     if (ctx == 0 || !ctx->initialized) return AMTARI_EINVAL;
     ctx->clock.get = get_fn;
+    ctx->clock.set = 0;
+    ctx->clock.opaque = opaque;
+    return 0;
+}
+
+int amtari_clock_bind_rw(struct amtari_context *ctx, amtari_clock_get_fn get_fn,
+                         amtari_clock_set_fn set_fn, void *opaque)
+{
+    if (ctx == 0 || !ctx->initialized) return AMTARI_EINVAL;
+    ctx->clock.get = get_fn;
+    ctx->clock.set = set_fn;
     ctx->clock.opaque = opaque;
     return 0;
 }

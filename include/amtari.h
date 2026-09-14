@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.2.14-m2"
+#define AMTARI_VERSION "0.2.15-m2"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_BASEPAGE_SIZE 256u
 #define AMTARI_EINVAL (-1)

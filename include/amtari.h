@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.2.17-m2"
+#define AMTARI_VERSION "0.2.18-m2"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_BASEPAGE_SIZE 256u
 #define AMTARI_EINVAL (-1)
@@ -79,6 +79,8 @@ int amtari_program_bind(struct amtari_context *ctx, amtari_program_fetch_fn fetc
 int amtari_process_set_load_address(struct amtari_context *ctx, uint32_t address);
 int amtari_prg_parse(const uint8_t *image, size_t image_size, struct amtari_prg_info *info);
 int32_t amtari_prg_load(struct amtari_context *ctx, const uint8_t *image, size_t image_size, uint32_t basepage, const uint8_t *cmdline);
+int32_t amtari_prg_load_reserved(struct amtari_context *ctx, const uint8_t *image, size_t image_size,
+                                uint32_t basepage, const uint8_t *cmdline, uint32_t tail_reserve);
 int amtari_exec_prepare(struct amtari_context *ctx, uint32_t basepage, uint32_t stack_top);
 int amtari_exec_step(struct amtari_context *ctx);
 int amtari_exec_run(struct amtari_context *ctx, uint32_t max_steps, uint32_t *steps_executed);

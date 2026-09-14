@@ -14,6 +14,16 @@
 #define M222_MAX_STEPS 65536u
 #define M222_MAX_PROCESS_DEPTH 8u
 
+static unsigned int m222_invalid_slots(const struct amtari_context *ctx)
+{
+    unsigned int i;
+    unsigned int count = 0u;
+    for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
+        if (!ctx->mem_blocks[i].valid) ++count;
+    }
+    return count;
+}
+
 static int m222_reserve_arena(struct amtari_context *ctx, uint32_t basepage,
                               uint32_t child_stack_top)
 {
@@ -22,10 +32,9 @@ static int m222_reserve_arena(struct amtari_context *ctx, uint32_t basepage,
     int split_slot;
     int slot;
 
-    /* Reuse a free block that already covers this exact address range. This is
-     * essential after a previous synchronous Pexec: its released arena remains
-     * reusable in the heap table and must not be shadowed by an overlapping
-     * descriptor on the next Pexec. */
+    /* Reuse a free block that already covers this address range. A released
+     * synchronous Pexec arena remains reusable in the table; adding a second
+     * descriptor over the same range would corrupt allocator topology. */
     m220_coalesce_free(ctx);
     for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
         struct amtari_mem_block *block = &ctx->mem_blocks[i];
@@ -33,6 +42,7 @@ static int m222_reserve_arena(struct amtari_context *ctx, uint32_t basepage,
         uint32_t arena_end;
         uint32_t prefix;
         uint32_t suffix;
+        unsigned int needed;
 
         if (!block->valid || block->in_use) continue;
         block_end = block->address + block->size;
@@ -41,6 +51,8 @@ static int m222_reserve_arena(struct amtari_context *ctx, uint32_t basepage,
 
         prefix = basepage - block->address;
         suffix = block_end - arena_end;
+        needed = (prefix != 0u ? 1u : 0u) + (suffix != 0u ? 1u : 0u);
+        if (m222_invalid_slots(ctx) < needed) return AMTARI_ENOMEM;
 
         if (prefix != 0u) {
             split_slot = m220_find_invalid_slot(ctx);
@@ -54,10 +66,7 @@ static int m222_reserve_arena(struct amtari_context *ctx, uint32_t basepage,
 
         if (suffix != 0u) {
             split_slot = m220_find_invalid_slot(ctx);
-            if (split_slot < 0) {
-                if (prefix != 0u) m220_clear_slot(&ctx->mem_blocks[split_slot]);
-                return AMTARI_ENOMEM;
-            }
+            if (split_slot < 0) return AMTARI_ENOMEM;
             ctx->mem_blocks[split_slot].address = arena_end;
             ctx->mem_blocks[split_slot].size = suffix;
             ctx->mem_blocks[split_slot].owner_basepage = 0u;

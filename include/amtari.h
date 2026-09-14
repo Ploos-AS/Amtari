@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.2.15-m2"
+#define AMTARI_VERSION "0.2.16-m2"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_BASEPAGE_SIZE 256u
 #define AMTARI_EINVAL (-1)
@@ -57,7 +57,8 @@ struct amtari_context {
     enum amtari_machine machine; enum amtari_mode mode; struct amtari_cpu_state cpu;
     struct amtari_guest_memory memory; struct amtari_console_io console; struct amtari_fs_io fs;
     struct amtari_process_io process; uint32_t drive_mask; uint8_t current_drive;
-    char cwd[26][AMTARI_PATH_MAX]; uint32_t next_load_address; uint32_t current_basepage; int initialized;
+    char cwd[26][AMTARI_PATH_MAX]; uint32_t next_load_address; uint32_t current_basepage;
+    uint8_t process_depth; int initialized;
 };
 
 const char *amtari_version(void);

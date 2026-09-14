@@ -71,17 +71,6 @@ static uint32_t get32(const uint8_t *memory, uint32_t address)
            ((uint32_t)memory[address + 2u] << 8) | (uint32_t)memory[address + 3u];
 }
 
-static int find_free_block_at(const struct amtari_context *ctx, uint32_t address)
-{
-    unsigned int i;
-    for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
-        if (ctx->mem_blocks[i].valid && !ctx->mem_blocks[i].in_use &&
-            ctx->mem_blocks[i].address == address && ctx->mem_blocks[i].size != 0u)
-            return 1;
-    }
-    return 0;
-}
-
 static void setup_pexec(uint8_t *memory, struct amtari_context *ctx, uint32_t name)
 {
     ctx->cpu.a[7] = 0x0400u;
@@ -122,6 +111,7 @@ int main(void)
     struct amtari_context ctx = {0};
     struct amtari_cpu_state parent_cpu;
     struct fetch_fixture fixture = {0};
+    struct amtari_mem_block blocks_before_child[AMTARI_MEM_BLOCK_MAX];
     uint8_t memory[32768] = {0};
     int32_t rc;
     int32_t a;
@@ -196,6 +186,7 @@ int main(void)
     assert(call_mshrink(memory, &ctx, (uint32_t)merged, 32u) == 0);
 
     heap_before_child = ctx.heap_top;
+    memcpy(blocks_before_child, ctx.mem_blocks, sizeof(blocks_before_child));
     setup_pexec(memory, &ctx, 0x0120u);
     rc = amtari_gemdos_dispatch(&ctx, 0x4bu);
     assert(rc == 7);
@@ -204,10 +195,10 @@ int main(void)
     assert(ctx.next_load_address == 0x1000u);
     assert(get32(memory, heap_before_child + 4u) > heap_before_child);
 
-    /* M2.22 records the complete child Pexec arena in mem_blocks while the
-     * child runs. On synchronous return it must be released as one reusable
-     * free region at the exact child basepage without disturbing parent heap. */
-    assert(find_free_block_at(&ctx, heap_before_child));
+    /* M2.22 tracks the complete child Pexec arena while the child runs, but
+     * synchronous return is transactional from the parent's point of view:
+     * allocator topology and heap_top must be restored exactly. */
+    assert(memcmp(ctx.mem_blocks, blocks_before_child, sizeof(blocks_before_child)) == 0);
 
     assert(call_malloc(memory, &ctx, UINT32_MAX) > 0);
     assert(call_mfree(memory, &ctx, 0x7770u) == AMTARI_EINVAL);

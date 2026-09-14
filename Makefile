@@ -6,7 +6,7 @@ CROSS_OBJCOPY ?= m68k-linux-gnu-objcopy
 CROSS_OBJDUMP ?= m68k-linux-gnu-objdump
 
 BUILD := build
-COMMON_SRC := src/amtari.c src/guest.c src/trap.c src/gemdos_m221.c src/fs.c src/prg.c src/exec_m215.c
+COMMON_SRC := src/amtari.c src/guest.c src/trap.c src/gemdos_m222.c src/fs.c src/prg.c src/exec_m215.c
 TEST_M0 := $(BUILD)/test_m0
 TEST_M1 := $(BUILD)/test_m1
 TEST_M2 := $(BUILD)/test_m2
@@ -149,7 +149,7 @@ check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_E
 	./$(TEST_M2_ADDR)
 	./$(TEST_M2_COMPILER)
 	./$(TEST_M2_PROCESS)
-	@echo "M2.21 host regression + process ownership checks: PASS"
+	@echo "M2.22 host regression + process arena checks: PASS"
 
 cross-check: $(CROSS_PRG) $(STRESS_PRG) $(M213_PRG) $(M213_INDEX_PRG) $(M214_PRG) $(M215_PRG) $(TEST_M2_CROSS)
 	@echo "--- M2.11 GCC-generated m68k code ---"
@@ -170,7 +170,7 @@ cross-check: $(CROSS_PRG) $(STRESS_PRG) $(M213_PRG) $(M213_INDEX_PRG) $(M214_PRG
 	@echo "--- M2.15 linked absolute-long relocation code ---"
 	$(CROSS_OBJDUMP) -dr $(M215_ELF)
 	./$(TEST_M2_CROSS) $(M215_PRG) 42
-	@echo "M2.21 cross regressions through M2.15: PASS"
+	@echo "M2.22 cross regressions through M2.15: PASS"
 
 clean:
 	rm -rf $(BUILD)

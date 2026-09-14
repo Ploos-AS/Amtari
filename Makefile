@@ -26,6 +26,10 @@ STRESS_OBJ := $(BUILD)/m2_12_stress.o
 STRESS_ELF := $(BUILD)/m2_12_stress.elf
 STRESS_TEXT := $(BUILD)/m2_12_stress.text
 STRESS_PRG := $(BUILD)/m2_12_stress.prg
+M213_OBJ := $(BUILD)/m2_13_indexed_movem.o
+M213_ELF := $(BUILD)/m2_13_indexed_movem.elf
+M213_TEXT := $(BUILD)/m2_13_indexed_movem.text
+M213_PRG := $(BUILD)/m2_13_indexed_movem.prg
 
 .PHONY: all check cross-check clean
 
@@ -91,6 +95,18 @@ $(STRESS_TEXT): $(STRESS_ELF)
 $(STRESS_PRG): $(STRESS_TEXT) tools/make_tos_prg.py
 	python3 tools/make_tos_prg.py $(STRESS_TEXT) $@
 
+$(M213_OBJ): tests/fixtures/m2_13_indexed_movem.c | $(BUILD)
+	$(CROSS_CC) -m68000 -O2 -ffreestanding -fno-pic -fno-pie -fno-stack-protector -fomit-frame-pointer -fno-toplevel-reorder -c $< -o $@
+
+$(M213_ELF): $(M213_OBJ)
+	$(CROSS_CC) -m68000 -nostdlib -Wl,--relax -Wl,-Ttext=0 -Wl,-e,amtari_entry -Wl,--build-id=none $< -o $@
+
+$(M213_TEXT): $(M213_ELF)
+	$(CROSS_OBJCOPY) -O binary -j .text $< $@
+
+$(M213_PRG): $(M213_TEXT) tools/make_tos_prg.py
+	python3 tools/make_tos_prg.py $(M213_TEXT) $@
+
 check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E) $(TEST_M2_COND) $(TEST_M2_ARITH) $(TEST_M2_ADDR) $(TEST_M2_COMPILER)
 	./$(TEST_M0)
 	./$(TEST_M1)
@@ -103,16 +119,19 @@ check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_E
 	./$(TEST_M2_ARITH)
 	./$(TEST_M2_ADDR)
 	./$(TEST_M2_COMPILER)
-	@echo "M2.12 host regression checks: PASS"
+	@echo "M2.13 host regression checks: PASS"
 
-cross-check: $(CROSS_PRG) $(STRESS_PRG) $(TEST_M2_CROSS)
+cross-check: $(CROSS_PRG) $(STRESS_PRG) $(M213_PRG) $(TEST_M2_CROSS)
 	@echo "--- M2.11 GCC-generated m68k code ---"
 	$(CROSS_OBJDUMP) -dr $(CROSS_OBJ)
 	./$(TEST_M2_CROSS) $(CROSS_PRG) 42
 	@echo "--- M2.12 linked GCC compiler-stress code ---"
 	$(CROSS_OBJDUMP) -dr $(STRESS_ELF)
 	./$(TEST_M2_CROSS) $(STRESS_PRG) 42
-	@echo "M2.12 real cross-compiled multi-function C PRG execution: PASS"
+	@echo "--- M2.13 indexed-addressing + MOVEM GCC code ---"
+	$(CROSS_OBJDUMP) -dr $(M213_ELF)
+	./$(TEST_M2_CROSS) $(M213_PRG) 42
+	@echo "M2.13 real GCC indexed addressing + MOVEM execution: PASS"
 
 clean:
 	rm -rf $(BUILD)

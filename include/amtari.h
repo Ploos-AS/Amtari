@@ -4,9 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.2.18-m2"
+#define AMTARI_VERSION "0.2.19-m2"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_BASEPAGE_SIZE 256u
+#define AMTARI_MEM_BLOCK_MAX 32u
 #define AMTARI_EINVAL (-1)
 #define AMTARI_EFAULT (-2)
 #define AMTARI_ENOSYS (-3)
@@ -52,12 +53,20 @@ struct amtari_fs_io {
 };
 struct amtari_process_io { amtari_program_fetch_fn fetch; void *opaque; };
 struct amtari_prg_info { uint32_t text_size, data_size, bss_size, symbol_size, flags; uint16_t absolute; };
+struct amtari_mem_block {
+    uint32_t address;
+    uint32_t size;
+    uint32_t owner_basepage;
+    uint8_t valid;
+    uint8_t in_use;
+};
 
 struct amtari_context {
     enum amtari_machine machine; enum amtari_mode mode; struct amtari_cpu_state cpu;
     struct amtari_guest_memory memory; struct amtari_console_io console; struct amtari_fs_io fs;
     struct amtari_process_io process; uint32_t drive_mask; uint8_t current_drive;
     char cwd[26][AMTARI_PATH_MAX]; uint32_t next_load_address; uint32_t current_basepage;
+    struct amtari_mem_block mem_blocks[AMTARI_MEM_BLOCK_MAX]; uint32_t heap_top;
     uint8_t process_depth; int initialized;
 };
 

@@ -1,9 +1,9 @@
 /* M2.15 execution extension layer: add d16(PC) data effective addressing. */
-#define amtari_exec_step amtari_exec_step_m213
-#define amtari_exec_run amtari_exec_run_m213
+#define AMTARI_M213_STEP_NAME amtari_exec_step_m213
+#define AMTARI_M213_RUN_NAME amtari_exec_run_m213
 #include "exec_m213.c"
-#undef amtari_exec_step
-#undef amtari_exec_run
+#undef AMTARI_M213_STEP_NAME
+#undef AMTARI_M213_RUN_NAME
 
 static int m215_pc_relative_read(struct amtari_context *ctx, unsigned int size,
                                  uint32_t *ext_pc, uint32_t *value)

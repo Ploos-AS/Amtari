@@ -3,12 +3,19 @@
  * Keep the established GEMDOS implementation intact and add Pterm0/Pterm.
  * The execution core currently halts on the following RTS sentinel, so these
  * handlers consume their GEMDOS stack arguments before returning control.
+ *
+ * Later milestone wrappers may override the exported dispatcher name before
+ * including this file.
  */
+#ifndef AMTARI_M214_DISPATCH_NAME
+#define AMTARI_M214_DISPATCH_NAME amtari_gemdos_dispatch
+#endif
+
 #define amtari_gemdos_dispatch amtari_gemdos_dispatch_m213
 #include "gemdos.c"
 #undef amtari_gemdos_dispatch
 
-int32_t amtari_gemdos_dispatch(struct amtari_context *ctx, uint16_t function)
+int32_t AMTARI_M214_DISPATCH_NAME(struct amtari_context *ctx, uint16_t function)
 {
     uint16_t code;
 

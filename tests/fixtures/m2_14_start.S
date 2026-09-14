@@ -2,7 +2,7 @@
         .globl _start
         .extern amtari_entry
 _start:
-        jsr amtari_entry
+        jsr %pc@(amtari_entry)
         movew %d0,%sp@-
         movew #0x004c,%sp@-
         trap #1

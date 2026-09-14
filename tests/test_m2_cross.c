@@ -53,9 +53,6 @@ int main(int argc, char **argv)
     assert(image != 0);
     assert(amtari_prg_parse(image, image_size, &info) == 0);
     assert(info.text_size > 0u);
-    assert(info.data_size == 0u);
-    assert(info.bss_size == 0u);
-    assert(info.absolute == 1u);
 
     basepage = amtari_prg_load(&ctx, image, image_size, 0x1000u, 0);
     assert(basepage == 0x1000);

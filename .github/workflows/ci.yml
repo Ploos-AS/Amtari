@@ -5,9 +5,20 @@ on:
   pull_request:
 
 jobs:
-  m0-host-checks:
+  host-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build and test
         run: make check
+
+  m2-11-cross-compiled-c:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install m68k cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-m68k-linux-gnu binutils-m68k-linux-gnu
+      - name: Build and execute real m68k C PRG
+        run: make cross-check

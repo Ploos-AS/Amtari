@@ -31,6 +31,14 @@ int amtari_random_seed(struct amtari_context *ctx, uint32_t seed)
     return 0;
 }
 
+int amtari_clock_bind(struct amtari_context *ctx, amtari_clock_get_fn get_fn, void *opaque)
+{
+    if (ctx == 0 || !ctx->initialized) return AMTARI_EINVAL;
+    ctx->clock.get = get_fn;
+    ctx->clock.opaque = opaque;
+    return 0;
+}
+
 int amtari_console_status_bind(struct amtari_context *ctx,
                                amtari_console_status_fn input_ready_fn,
                                amtari_console_status_fn output_ready_fn)

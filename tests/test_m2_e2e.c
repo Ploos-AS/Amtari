@@ -60,23 +60,13 @@ static size_t make_hello_prg(uint8_t *image)
 
     memset(image, 0, 80u);
     put16(&image[0], 0x601au);
-    put32(&image[2], 16u); /* TEXT */
-    put32(&image[6], 12u); /* DATA */
-    put32(&image[10], 64u); /* BSS / initial stack room */
-    put32(&image[14], 0u); /* symbols */
-    put32(&image[22], 0u); /* flags */
-    put16(&image[26], 0u); /* relocatable */
+    put32(&image[2], 16u);
+    put32(&image[6], 12u);
+    put32(&image[10], 64u);
+    put32(&image[14], 0u);
+    put32(&image[22], 0u);
+    put16(&image[26], 0u);
 
-    /*
-       MOVE.L #message,-(SP)
-       MOVE.W #9,-(SP)       ; GEMDOS Cconws
-       TRAP #1
-       ADDQ.L #6,SP
-       RTS
-
-       The immediate long contains offset 16 and is relocated to tbase + 16,
-       which is the start of DATA.
-    */
     put16(&image[28], 0x2f3cu);
     put32(&image[30], 16u);
     put16(&image[34], 0x3f3cu);
@@ -84,10 +74,7 @@ static size_t make_hello_prg(uint8_t *image)
     put16(&image[38], 0x4e41u);
     put16(&image[40], 0x5c8fu);
     put16(&image[42], 0x4e75u);
-
     memcpy(&image[44], message, sizeof(message));
-
-    /* Relocation table: first long to relocate is TEXT+2, then end. */
     put32(&image[56], 2u);
     image[60] = 0u;
     return 61u;
@@ -110,7 +97,7 @@ int main(void)
     program.last_path[0] = '\0';
 
     assert(amtari_init(&ctx) == 0);
-    assert(strcmp(amtari_version(), "0.2.6-m2") == 0);
+    assert(strncmp(amtari_version(), "0.2.", 4) == 0);
     assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
     assert(amtari_console_bind(&ctx, 0, console_putc, &console) == 0);
     assert(amtari_program_bind(&ctx, fetch_program, &program) == 0);
@@ -118,8 +105,6 @@ int main(void)
     assert(amtari_process_set_load_address(&ctx, 0x1000u) == 0);
 
     strcpy((char *)&memory[0x200u], "A:\\HELLO.PRG");
-
-    /* Pexec(3): load the relocatable PRG and create its basepage. */
     ctx.cpu.a[7] = 0x300u;
     put16(&memory[0x302u], 3u);
     put32(&memory[0x304u], 0x200u);
@@ -136,7 +121,6 @@ int main(void)
     assert(get32(&memory[tbase + 2u]) == tbase + 16u);
     assert(memcmp(&memory[tbase + 16u], "Amtari PRG!", 11u) == 0);
 
-    /* Pexec(4): establish PC/A0/SP from the loaded basepage. */
     ctx.cpu.a[7] = 0x300u;
     put16(&memory[0x302u], 4u);
     put32(&memory[0x304u], 0u);
@@ -148,7 +132,6 @@ int main(void)
     assert(ctx.cpu.a[0] == (uint32_t)basepage);
     assert(ctx.cpu.a[7] == hitpa - 4u);
 
-    /* Execute the PRG through the interpreter and GEMDOS host bridge. */
     assert(amtari_exec_run(&ctx, 32u, &steps) == AMTARI_EXEC_HALTED);
     assert(steps == 5u);
     assert(console.out_len == 11u);

@@ -18,6 +18,7 @@ int amtari_init(struct amtari_context *ctx)
     ctx->mode = AMTARI_MODE_NATIVE;
     ctx->drive_mask = 1u;
     ctx->current_drive = 0u;
+    ctx->next_load_address = 0x1000u;
     ctx->initialized = 1;
     return 0;
 }

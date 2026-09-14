@@ -13,7 +13,7 @@ TEST_M2_EXEC := $(BUILD)/test_m2_exec
 TEST_M2_E2E := $(BUILD)/test_m2_e2e
 TEST_M2_COND := $(BUILD)/test_m2_cond
 TEST_M2_ARITH := $(BUILD)/test_m2_arith
-TEST_M2_ADDR := $(BUILD)/test_m2_addr
+TEST_M2_ADDR := $(BUILD)/test_m2_addressing
 TEST_M2_COMPILER := $(BUILD)/test_m2_compiler
 
 .PHONY: all check clean
@@ -50,8 +50,8 @@ $(TEST_M2_COND): $(COMMON_SRC) tests/test_m2_cond.c include/amtari.h | $(BUILD)
 $(TEST_M2_ARITH): $(COMMON_SRC) tests/test_m2_arith.c include/amtari.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m2_arith.c -o $(TEST_M2_ARITH)
 
-$(TEST_M2_ADDR): $(COMMON_SRC) tests/test_m2_addr.c include/amtari.h | $(BUILD)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m2_addr.c -o $(TEST_M2_ADDR)
+$(TEST_M2_ADDR): $(COMMON_SRC) tests/test_m2_addressing.c include/amtari.h | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m2_addressing.c -o $(TEST_M2_ADDR)
 
 $(TEST_M2_COMPILER): $(COMMON_SRC) tests/test_m2_compiler.c include/amtari.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m2_compiler.c -o $(TEST_M2_COMPILER)

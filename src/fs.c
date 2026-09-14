@@ -56,7 +56,6 @@ int amtari_path_translate(const struct amtari_context *ctx, uint32_t guest_addre
     size_t in_pos = 0;
     size_t out_pos = 0;
     uint8_t drive;
-    int explicit_drive = 0;
     int absolute = 0;
 
     if (ctx == 0 || output == 0 || output_size < 4u) {
@@ -72,7 +71,6 @@ int amtari_path_translate(const struct amtari_context *ctx, uint32_t guest_addre
         ctx->memory.data[guest_address + 1u] == ':') {
         unsigned char letter = (unsigned char)toupper((unsigned char)ctx->memory.data[guest_address]);
         drive = (uint8_t)(letter - 'A');
-        explicit_drive = 1;
         in_pos = 2;
     }
 

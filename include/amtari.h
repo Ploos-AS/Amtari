@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.2.23-m2"
+#define AMTARI_VERSION "0.2.24-m2"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_BASEPAGE_SIZE 256u
 #define AMTARI_MEM_BLOCK_MAX 32u
@@ -32,6 +32,7 @@ enum amtari_trap_kind { AMTARI_TRAP_UNKNOWN = 0, AMTARI_TRAP_GEMDOS, AMTARI_TRAP
 
 typedef int (*amtari_console_getc_fn)(void *opaque);
 typedef int (*amtari_console_putc_fn)(void *opaque, unsigned char ch);
+typedef int (*amtari_console_status_fn)(void *opaque);
 typedef int32_t (*amtari_fs_open_fn)(void *opaque, const char *path, uint16_t mode);
 typedef int32_t (*amtari_fs_create_fn)(void *opaque, const char *path, uint16_t attr);
 typedef int32_t (*amtari_fs_close_fn)(void *opaque, int16_t handle);
@@ -45,7 +46,13 @@ typedef int (*amtari_program_fetch_fn)(void *opaque, const char *path, const uin
 
 struct amtari_cpu_state { uint32_t d[8]; uint32_t a[8]; uint32_t pc; uint16_t sr; };
 struct amtari_guest_memory { uint8_t *data; size_t size; };
-struct amtari_console_io { amtari_console_getc_fn getc; amtari_console_putc_fn putc; void *opaque; };
+struct amtari_console_io {
+    amtari_console_getc_fn getc;
+    amtari_console_putc_fn putc;
+    amtari_console_status_fn input_ready;
+    amtari_console_status_fn output_ready;
+    void *opaque;
+};
 struct amtari_fs_io {
     amtari_fs_open_fn open; amtari_fs_create_fn create; amtari_fs_close_fn close;
     amtari_fs_read_fn read; amtari_fs_write_fn write; amtari_fs_seek_fn seek;
@@ -77,6 +84,8 @@ int amtari_guest_range_valid(const struct amtari_context *ctx, uint32_t address,
 int amtari_guest_read16(const struct amtari_context *ctx, uint32_t address, uint16_t *value);
 int amtari_guest_read32(const struct amtari_context *ctx, uint32_t address, uint32_t *value);
 int amtari_console_bind(struct amtari_context *ctx, amtari_console_getc_fn getc_fn, amtari_console_putc_fn putc_fn, void *opaque);
+int amtari_console_status_bind(struct amtari_context *ctx, amtari_console_status_fn input_ready_fn,
+                               amtari_console_status_fn output_ready_fn);
 int amtari_fs_bind(struct amtari_context *ctx, amtari_fs_open_fn open_fn, amtari_fs_create_fn create_fn,
                    amtari_fs_close_fn close_fn, amtari_fs_read_fn read_fn, amtari_fs_write_fn write_fn,
                    amtari_fs_seek_fn seek_fn, amtari_fs_delete_fn delete_fn, amtari_fs_mkdir_fn mkdir_fn,

@@ -87,11 +87,22 @@ static int32_t xbios_random(struct amtari_context *ctx)
     return (int32_t)((ctx->random_seed >> 8) & UINT32_C(0x00ffffff));
 }
 
+static int32_t xbios_gettime(struct amtari_context *ctx)
+{
+    uint32_t tos_datetime;
+
+    if (ctx->clock.get == 0) return AMTARI_EIO;
+    if (ctx->clock.get(ctx->clock.opaque, &tos_datetime) != 0) return AMTARI_EIO;
+    return (int32_t)tos_datetime;
+}
+
 static int32_t dispatch_xbios(struct amtari_context *ctx, uint16_t function)
 {
     switch (function) {
     case 0x11u: /* Random */
         return xbios_random(ctx);
+    case 0x17u: /* Gettime */
+        return xbios_gettime(ctx);
     default:
         return AMTARI_ENOSYS;
     }

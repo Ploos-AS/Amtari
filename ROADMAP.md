@@ -2,7 +2,7 @@
 
 Amtari is developed incrementally. A milestone is not considered runtime-qualified merely because its interfaces or skeletons exist.
 
-## M0 — Project foundation
+## M0 — Project foundation ✅
 
 - Define project scope and compatibility philosophy.
 - Document native, hybrid and full-compatibility execution modes.
@@ -11,15 +11,20 @@ Amtari is developed incrementally. A milestone is not considered runtime-qualifi
 - Record supported and future Atari machine families.
 - Add basic CI suitable for host-side checks.
 
-**Exit criterion:** repository baseline is coherent and host-side skeleton builds/tests without claiming Atari runtime compatibility.
+**Qualified:** GitHub Actions host checks pass.
 
 ## M1 — 68k execution model and trap core
 
-- Define Atari guest address-space model.
-- Define safe native-68k execution boundary.
-- GEMDOS trap dispatcher skeleton.
-- BIOS/XBIOS dispatch interfaces.
-- Host-independent unit tests for trap decoding and guest state.
+- [x] Define Atari guest CPU state.
+- [x] Define bounded Atari guest address-space access helpers.
+- [x] Define safe native-68k execution boundary at the API level; native execution must never imply unchecked host pointer access.
+- [x] GEMDOS TRAP #1 dispatcher skeleton.
+- [x] BIOS TRAP #13 dispatcher skeleton.
+- [x] XBIOS TRAP #14 dispatcher skeleton.
+- [x] Host-independent unit tests for trap decoding, guest state and big-endian guest memory reads.
+- [ ] CI qualification of the complete M1 host test suite.
+
+**Exit criterion:** all M0/M1 host tests pass in CI and the trap/address-space interfaces form a stable base for implementing the first GEMDOS calls.
 
 ## M2 — Minimal TOS/GEM application environment
 

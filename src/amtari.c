@@ -22,3 +22,13 @@ int amtari_init(struct amtari_context *ctx)
     ctx->initialized = 1;
     return 0;
 }
+
+int amtari_console_status_bind(struct amtari_context *ctx,
+                               amtari_console_status_fn input_ready_fn,
+                               amtari_console_status_fn output_ready_fn)
+{
+    if (ctx == 0) return AMTARI_EINVAL;
+    ctx->console.input_ready = input_ready_fn;
+    ctx->console.output_ready = output_ready_fn;
+    return 0;
+}

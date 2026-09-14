@@ -1,13 +1,16 @@
 /* M2.16 GEMDOS process extension: Pexec(0) load-and-go.
  *
  * Execute one child process synchronously, preserve the parent CPU/basepage,
- * and return the child's exit code to the parent.  This intentionally starts
+ * and return the child's exit code to the parent. This intentionally starts
  * with one child depth; nested Pexec can be added after the basic lifecycle is
  * proven stable.
  */
 #define AMTARI_M214_DISPATCH_NAME amtari_gemdos_dispatch_m214
 #include "gemdos_m214.c"
 #undef AMTARI_M214_DISPATCH_NAME
+
+#define M216_STACK_RESERVE 4096u
+#define M216_MAX_STEPS 65536u
 
 static int32_t m216_pexec_load_and_go(struct amtari_context *ctx)
 {
@@ -19,8 +22,9 @@ static int32_t m216_pexec_load_and_go(struct amtari_context *ctx)
     char path[AMTARI_PATH_MAX];
     struct amtari_cpu_state parent_cpu;
     uint32_t parent_basepage;
+    uint32_t parent_next_load;
     uint32_t basepage;
-    uint32_t hitpa;
+    uint32_t child_stack_top;
     uint32_t steps = 0u;
     int32_t load_result;
     int child_rc;
@@ -50,19 +54,31 @@ static int32_t m216_pexec_load_and_go(struct amtari_context *ctx)
 
     parent_cpu = ctx->cpu;
     parent_basepage = ctx->current_basepage;
-    basepage = ctx->next_load_address;
+    parent_next_load = ctx->next_load_address;
+    basepage = parent_next_load;
+
     load_result = amtari_prg_load(ctx, image, image_size, basepage, cmdline);
     if (load_result < 0) return load_result;
-    if (amtari_guest_read32(ctx, basepage + 0x04u, &hitpa) != 0) return AMTARI_EFAULT;
+    if (ctx->next_load_address > UINT32_MAX - M216_STACK_RESERVE) {
+        ctx->next_load_address = parent_next_load;
+        return AMTARI_ENOMEM;
+    }
+    child_stack_top = ctx->next_load_address + M216_STACK_RESERVE;
+    if (child_stack_top < 4u ||
+        !amtari_guest_range_valid(ctx, child_stack_top - 4u, 4u)) {
+        ctx->next_load_address = parent_next_load;
+        return AMTARI_ENOMEM;
+    }
 
     ctx->process_depth = 1u;
-    rc = amtari_exec_prepare(ctx, basepage, hitpa);
-    if (rc == 0) child_rc = amtari_exec_run(ctx, 65536u, &steps);
+    rc = amtari_exec_prepare(ctx, basepage, child_stack_top);
+    if (rc == 0) child_rc = amtari_exec_run(ctx, M216_MAX_STEPS, &steps);
     else child_rc = rc;
 
     if (child_rc == AMTARI_EXEC_HALTED) child_rc = (int32_t)ctx->cpu.d[0];
     ctx->cpu = parent_cpu;
     ctx->current_basepage = parent_basepage;
+    ctx->next_load_address = parent_next_load;
     ctx->process_depth = 0u;
 
     return child_rc;

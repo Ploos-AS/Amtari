@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.2.1-m2"
+#define AMTARI_VERSION "0.2.2-m2"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_EINVAL (-1)
 #define AMTARI_EFAULT (-2)
@@ -12,6 +12,12 @@
 #define AMTARI_EIO (-4)
 #define AMTARI_ENOENT (-5)
 #define AMTARI_EBADF (-6)
+#define AMTARI_EACCES (-7)
+#define AMTARI_EEXIST (-8)
+#define AMTARI_ENOTDIR (-9)
+#define AMTARI_EISDIR (-10)
+#define AMTARI_ENOSPC (-11)
+#define AMTARI_ENOTEMPTY (-12)
 
 enum amtari_mode {
     AMTARI_MODE_NATIVE = 0,
@@ -36,9 +42,14 @@ enum amtari_trap_kind {
 typedef int (*amtari_console_getc_fn)(void *opaque);
 typedef int (*amtari_console_putc_fn)(void *opaque, unsigned char ch);
 typedef int32_t (*amtari_fs_open_fn)(void *opaque, const char *path, uint16_t mode);
+typedef int32_t (*amtari_fs_create_fn)(void *opaque, const char *path, uint16_t attr);
 typedef int32_t (*amtari_fs_close_fn)(void *opaque, int16_t handle);
 typedef int32_t (*amtari_fs_read_fn)(void *opaque, int16_t handle, void *buffer, uint32_t count);
 typedef int32_t (*amtari_fs_write_fn)(void *opaque, int16_t handle, const void *buffer, uint32_t count);
+typedef int32_t (*amtari_fs_seek_fn)(void *opaque, int16_t handle, int32_t offset, uint16_t mode);
+typedef int32_t (*amtari_fs_delete_fn)(void *opaque, const char *path);
+typedef int32_t (*amtari_fs_mkdir_fn)(void *opaque, const char *path);
+typedef int32_t (*amtari_fs_rmdir_fn)(void *opaque, const char *path);
 
 struct amtari_cpu_state {
     uint32_t d[8];
@@ -60,9 +71,14 @@ struct amtari_console_io {
 
 struct amtari_fs_io {
     amtari_fs_open_fn open;
+    amtari_fs_create_fn create;
     amtari_fs_close_fn close;
     amtari_fs_read_fn read;
     amtari_fs_write_fn write;
+    amtari_fs_seek_fn seek;
+    amtari_fs_delete_fn unlink;
+    amtari_fs_mkdir_fn mkdir;
+    amtari_fs_rmdir_fn rmdir;
     void *opaque;
 };
 
@@ -75,6 +91,7 @@ struct amtari_context {
     struct amtari_fs_io fs;
     uint32_t drive_mask;
     uint8_t current_drive;
+    char cwd[26][AMTARI_PATH_MAX];
     int initialized;
 };
 
@@ -87,11 +104,15 @@ int amtari_guest_read32(const struct amtari_context *ctx, uint32_t address, uint
 int amtari_console_bind(struct amtari_context *ctx, amtari_console_getc_fn getc_fn,
                         amtari_console_putc_fn putc_fn, void *opaque);
 int amtari_fs_bind(struct amtari_context *ctx, amtari_fs_open_fn open_fn,
-                   amtari_fs_close_fn close_fn, amtari_fs_read_fn read_fn,
-                   amtari_fs_write_fn write_fn, void *opaque);
+                   amtari_fs_create_fn create_fn, amtari_fs_close_fn close_fn,
+                   amtari_fs_read_fn read_fn, amtari_fs_write_fn write_fn,
+                   amtari_fs_seek_fn seek_fn, amtari_fs_delete_fn delete_fn,
+                   amtari_fs_mkdir_fn mkdir_fn, amtari_fs_rmdir_fn rmdir_fn,
+                   void *opaque);
 int amtari_fs_set_drives(struct amtari_context *ctx, uint32_t drive_mask, uint8_t current_drive);
 int amtari_path_translate(const struct amtari_context *ctx, uint32_t guest_address,
                           char *output, size_t output_size);
+int32_t amtari_gemdos_error_from_host(int32_t host_error);
 
 enum amtari_trap_kind amtari_trap_decode(unsigned int trap_number);
 int32_t amtari_gemdos_dispatch(struct amtari_context *ctx, uint16_t function);

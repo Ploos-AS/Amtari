@@ -1,29 +1,28 @@
-/* M2.19 GEMDOS process/memory extension.
+/* M2.20 GEMDOS process/memory extension.
  *
- * M2.18 supplied complete process blocks for Pexec(0). M2.19 adds a bounded
- * guest heap implementing GEMDOS Malloc/Mfree/Mshrink. Heap blocks are owned by
- * the current basepage so synchronous child-process allocations can be released
- * when the child exits without leaking into the restored parent allocation view.
+ * M2.19 introduced a bounded guest heap. M2.20 adds splitting, adjacent free
+ * block coalescing, top trimming, largest-free-block queries over fragmented
+ * memory, and keeps Pexec children above any active parent heap allocation.
  */
 #define AMTARI_M214_DISPATCH_NAME amtari_gemdos_dispatch_m214
 #include "gemdos_m214.c"
 #undef AMTARI_M214_DISPATCH_NAME
 
-#define M219_STACK_RESERVE 4096u
-#define M219_MAX_STEPS 65536u
-#define M219_MAX_PROCESS_DEPTH 8u
+#define M220_STACK_RESERVE 4096u
+#define M220_MAX_STEPS 65536u
+#define M220_MAX_PROCESS_DEPTH 8u
 
-static uint32_t m219_align16(uint32_t value)
+static uint32_t m220_align16(uint32_t value)
 {
     return (value + 15u) & ~15u;
 }
 
-static uint32_t m219_memory_limit(const struct amtari_context *ctx)
+static uint32_t m220_memory_limit(const struct amtari_context *ctx)
 {
     return ctx->memory.size > UINT32_MAX ? UINT32_MAX : (uint32_t)ctx->memory.size;
 }
 
-static int m219_find_invalid_slot(const struct amtari_context *ctx)
+static int m220_find_invalid_slot(const struct amtari_context *ctx)
 {
     unsigned int i;
     for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
@@ -32,7 +31,7 @@ static int m219_find_invalid_slot(const struct amtari_context *ctx)
     return -1;
 }
 
-static int m219_find_block(const struct amtari_context *ctx, uint32_t address)
+static int m220_find_block(const struct amtari_context *ctx, uint32_t address)
 {
     unsigned int i;
     for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
@@ -42,30 +41,81 @@ static int m219_find_block(const struct amtari_context *ctx, uint32_t address)
     return -1;
 }
 
-static void m219_trim_heap(struct amtari_context *ctx)
+static void m220_clear_slot(struct amtari_mem_block *block)
 {
-    uint32_t top = ctx->next_load_address;
+    memset(block, 0, sizeof(*block));
+}
+
+static void m220_coalesce_free(struct amtari_context *ctx)
+{
+    int changed;
+    unsigned int i;
+    unsigned int j;
+
+    do {
+        changed = 0;
+        for (i = 0u; i < AMTARI_MEM_BLOCK_MAX && !changed; ++i) {
+            uint32_t i_end;
+            if (!ctx->mem_blocks[i].valid || ctx->mem_blocks[i].in_use) continue;
+            i_end = ctx->mem_blocks[i].address + ctx->mem_blocks[i].size;
+            for (j = i + 1u; j < AMTARI_MEM_BLOCK_MAX; ++j) {
+                uint32_t j_end;
+                if (!ctx->mem_blocks[j].valid || ctx->mem_blocks[j].in_use) continue;
+                j_end = ctx->mem_blocks[j].address + ctx->mem_blocks[j].size;
+                if (i_end == ctx->mem_blocks[j].address) {
+                    ctx->mem_blocks[i].size += ctx->mem_blocks[j].size;
+                    m220_clear_slot(&ctx->mem_blocks[j]);
+                    changed = 1;
+                    break;
+                }
+                if (j_end == ctx->mem_blocks[i].address) {
+                    ctx->mem_blocks[i].address = ctx->mem_blocks[j].address;
+                    ctx->mem_blocks[i].size += ctx->mem_blocks[j].size;
+                    m220_clear_slot(&ctx->mem_blocks[j]);
+                    changed = 1;
+                    break;
+                }
+            }
+        }
+    } while (changed);
+}
+
+static void m220_trim_heap(struct amtari_context *ctx)
+{
+    int changed;
     unsigned int i;
 
-    for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
-        uint32_t end;
-        if (!ctx->mem_blocks[i].valid || !ctx->mem_blocks[i].in_use) continue;
-        end = ctx->mem_blocks[i].address + ctx->mem_blocks[i].size;
-        if (end > top) top = end;
-    }
-    ctx->heap_top = top;
+    m220_coalesce_free(ctx);
+    if (ctx->heap_top < ctx->next_load_address) ctx->heap_top = ctx->next_load_address;
 
-    /* Free blocks wholly above the active high-water mark are represented by
-     * the tail again; retaining them would create overlapping free regions. */
-    for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
-        if (ctx->mem_blocks[i].valid && !ctx->mem_blocks[i].in_use &&
-            ctx->mem_blocks[i].address >= top) {
-            memset(&ctx->mem_blocks[i], 0, sizeof(ctx->mem_blocks[i]));
+    do {
+        changed = 0;
+        for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
+            uint32_t end;
+            if (!ctx->mem_blocks[i].valid || ctx->mem_blocks[i].in_use) continue;
+            end = ctx->mem_blocks[i].address + ctx->mem_blocks[i].size;
+            if (end == ctx->heap_top && ctx->mem_blocks[i].address >= ctx->next_load_address) {
+                ctx->heap_top = ctx->mem_blocks[i].address;
+                m220_clear_slot(&ctx->mem_blocks[i]);
+                changed = 1;
+                break;
+            }
         }
+    } while (changed);
+
+    if (ctx->heap_top == ctx->next_load_address) {
+        int any_used = 0;
+        for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
+            if (ctx->mem_blocks[i].valid && ctx->mem_blocks[i].in_use) {
+                any_used = 1;
+                break;
+            }
+        }
+        if (!any_used && ctx->process_depth == 0u) ctx->heap_top = 0u;
     }
 }
 
-static void m219_release_owner(struct amtari_context *ctx, uint32_t owner)
+static void m220_release_owner(struct amtari_context *ctx, uint32_t owner)
 {
     unsigned int i;
     for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
@@ -75,10 +125,10 @@ static void m219_release_owner(struct amtari_context *ctx, uint32_t owner)
             ctx->mem_blocks[i].owner_basepage = 0u;
         }
     }
-    m219_trim_heap(ctx);
+    m220_trim_heap(ctx);
 }
 
-static int32_t m219_malloc(struct amtari_context *ctx)
+static int32_t m220_malloc(struct amtari_context *ctx)
 {
     uint32_t request;
     uint32_t size;
@@ -86,10 +136,11 @@ static int32_t m219_malloc(struct amtari_context *ctx)
     uint32_t limit;
     uint32_t largest = 0u;
     unsigned int i;
+    int split_slot;
     int slot;
 
     if (read_arg32(ctx, 0u, &request) != 0) return AMTARI_EFAULT;
-    limit = m219_memory_limit(ctx);
+    limit = m220_memory_limit(ctx);
 
     if (request == UINT32_MAX) {
         start = ctx->heap_top > ctx->next_load_address ? ctx->heap_top : ctx->next_load_address;
@@ -102,21 +153,35 @@ static int32_t m219_malloc(struct amtari_context *ctx)
     }
 
     if (request == 0u || request > UINT32_MAX - 15u) return AMTARI_ENOMEM;
-    size = m219_align16(request);
+    size = m220_align16(request);
+    m220_coalesce_free(ctx);
 
     for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
-        if (ctx->mem_blocks[i].valid && !ctx->mem_blocks[i].in_use &&
-            ctx->mem_blocks[i].size >= size) {
-            ctx->mem_blocks[i].in_use = 1u;
-            ctx->mem_blocks[i].owner_basepage = ctx->current_basepage;
-            return (int32_t)ctx->mem_blocks[i].address;
+        uint32_t remainder;
+        if (!ctx->mem_blocks[i].valid || ctx->mem_blocks[i].in_use ||
+            ctx->mem_blocks[i].size < size) continue;
+
+        remainder = ctx->mem_blocks[i].size - size;
+        if (remainder >= 16u) {
+            split_slot = m220_find_invalid_slot(ctx);
+            if (split_slot >= 0) {
+                ctx->mem_blocks[split_slot].address = ctx->mem_blocks[i].address + size;
+                ctx->mem_blocks[split_slot].size = remainder;
+                ctx->mem_blocks[split_slot].owner_basepage = 0u;
+                ctx->mem_blocks[split_slot].valid = 1u;
+                ctx->mem_blocks[split_slot].in_use = 0u;
+                ctx->mem_blocks[i].size = size;
+            }
         }
+        ctx->mem_blocks[i].in_use = 1u;
+        ctx->mem_blocks[i].owner_basepage = ctx->current_basepage;
+        return (int32_t)ctx->mem_blocks[i].address;
     }
 
-    slot = m219_find_invalid_slot(ctx);
+    slot = m220_find_invalid_slot(ctx);
     if (slot < 0) return AMTARI_ENOMEM;
     start = ctx->heap_top > ctx->next_load_address ? ctx->heap_top : ctx->next_load_address;
-    start = m219_align16(start);
+    start = m220_align16(start);
     if (start > limit || size > limit - start) return AMTARI_ENOMEM;
 
     ctx->mem_blocks[slot].address = start;
@@ -128,54 +193,62 @@ static int32_t m219_malloc(struct amtari_context *ctx)
     return (int32_t)start;
 }
 
-static int32_t m219_mfree(struct amtari_context *ctx)
+static int32_t m220_mfree(struct amtari_context *ctx)
 {
     uint32_t address;
     int slot;
     if (read_arg32(ctx, 0u, &address) != 0) return AMTARI_EFAULT;
-    slot = m219_find_block(ctx, address);
+    slot = m220_find_block(ctx, address);
     if (slot < 0) return AMTARI_EINVAL;
     ctx->mem_blocks[slot].in_use = 0u;
     ctx->mem_blocks[slot].owner_basepage = 0u;
-    m219_trim_heap(ctx);
+    m220_trim_heap(ctx);
     return 0;
 }
 
-static int32_t m219_mshrink(struct amtari_context *ctx)
+static int32_t m220_mshrink(struct amtari_context *ctx)
 {
     uint16_t dummy;
     uint32_t address;
     uint32_t requested;
     uint32_t new_size;
     uint32_t old_size;
+    uint32_t old_end;
     int slot;
     int free_slot;
 
     if (read_arg16(ctx, 0u, &dummy) != 0 || read_arg32(ctx, 2u, &address) != 0 ||
         read_arg32(ctx, 6u, &requested) != 0) return AMTARI_EFAULT;
     (void)dummy;
-    slot = m219_find_block(ctx, address);
+    slot = m220_find_block(ctx, address);
     if (slot < 0) return AMTARI_EINVAL;
     if (requested == 0u || requested > UINT32_MAX - 15u) return AMTARI_EINVAL;
-    new_size = m219_align16(requested);
+    new_size = m220_align16(requested);
     old_size = ctx->mem_blocks[slot].size;
     if (new_size > old_size) return AMTARI_ENOMEM;
     if (new_size == old_size) return 0;
 
-    free_slot = m219_find_invalid_slot(ctx);
-    if (free_slot >= 0) {
-        ctx->mem_blocks[free_slot].address = address + new_size;
-        ctx->mem_blocks[free_slot].size = old_size - new_size;
-        ctx->mem_blocks[free_slot].owner_basepage = 0u;
-        ctx->mem_blocks[free_slot].valid = 1u;
-        ctx->mem_blocks[free_slot].in_use = 0u;
+    old_end = address + old_size;
+    if (old_end == ctx->heap_top) {
+        ctx->mem_blocks[slot].size = new_size;
+        ctx->heap_top = address + new_size;
+        m220_trim_heap(ctx);
+        return 0;
     }
+
+    free_slot = m220_find_invalid_slot(ctx);
+    if (free_slot < 0) return AMTARI_ENOMEM;
+    ctx->mem_blocks[free_slot].address = address + new_size;
+    ctx->mem_blocks[free_slot].size = old_size - new_size;
+    ctx->mem_blocks[free_slot].owner_basepage = 0u;
+    ctx->mem_blocks[free_slot].valid = 1u;
+    ctx->mem_blocks[free_slot].in_use = 0u;
     ctx->mem_blocks[slot].size = new_size;
-    m219_trim_heap(ctx);
+    m220_coalesce_free(ctx);
     return 0;
 }
 
-static int32_t m219_pexec_load_and_go(struct amtari_context *ctx)
+static int32_t m220_pexec_load_and_go(struct amtari_context *ctx)
 {
     uint16_t mode;
     uint32_t name, cmdline_address, env;
@@ -200,7 +273,7 @@ static int32_t m219_pexec_load_and_go(struct amtari_context *ctx)
         return AMTARI_EFAULT;
     (void)env;
     if (mode != 0u) return AMTARI_ENOSYS;
-    if (ctx->process_depth >= M219_MAX_PROCESS_DEPTH) return AMTARI_ENOSYS;
+    if (ctx->process_depth >= M220_MAX_PROCESS_DEPTH) return AMTARI_ENOSYS;
     if (ctx->process.fetch == 0) return AMTARI_EIO;
 
     rc = amtari_path_translate(ctx, name, path, sizeof(path));
@@ -222,10 +295,11 @@ static int32_t m219_pexec_load_and_go(struct amtari_context *ctx)
     parent_next_load = ctx->next_load_address;
     parent_heap_top = ctx->heap_top;
     parent_depth = ctx->process_depth;
-    basepage = parent_next_load;
+    basepage = parent_heap_top > parent_next_load ? parent_heap_top : parent_next_load;
+    basepage = m220_align16(basepage);
 
     load_result = amtari_prg_load_reserved(ctx, image, image_size, basepage, cmdline,
-                                          M219_STACK_RESERVE);
+                                          M220_STACK_RESERVE);
     if (load_result < 0) return load_result;
 
     child_stack_top = ctx->next_load_address;
@@ -238,11 +312,11 @@ static int32_t m219_pexec_load_and_go(struct amtari_context *ctx)
 
     ctx->process_depth = (uint8_t)(parent_depth + 1u);
     rc = amtari_exec_prepare(ctx, basepage, child_stack_top);
-    if (rc == 0) child_rc = amtari_exec_run(ctx, M219_MAX_STEPS, &steps);
+    if (rc == 0) child_rc = amtari_exec_run(ctx, M220_MAX_STEPS, &steps);
     else child_rc = rc;
 
     if (child_rc == AMTARI_EXEC_HALTED) child_rc = (int32_t)ctx->cpu.d[0];
-    m219_release_owner(ctx, basepage);
+    m220_release_owner(ctx, basepage);
     ctx->cpu = parent_cpu;
     ctx->current_basepage = parent_basepage;
     ctx->next_load_address = parent_next_load;
@@ -257,11 +331,11 @@ int32_t amtari_gemdos_dispatch(struct amtari_context *ctx, uint16_t function)
     uint16_t mode;
 
     if (ctx == 0 || !ctx->initialized) return AMTARI_EINVAL;
-    if (function == 0x48u) return m219_malloc(ctx);
-    if (function == 0x49u) return m219_mfree(ctx);
-    if (function == 0x4au) return m219_mshrink(ctx);
+    if (function == 0x48u) return m220_malloc(ctx);
+    if (function == 0x49u) return m220_mfree(ctx);
+    if (function == 0x4au) return m220_mshrink(ctx);
     if (function != 0x4bu) return amtari_gemdos_dispatch_m214(ctx, function);
     if (read_arg16(ctx, 0u, &mode) != 0) return AMTARI_EFAULT;
     if (mode != 0u) return amtari_gemdos_dispatch_m214(ctx, function);
-    return m219_pexec_load_and_go(ctx);
+    return m220_pexec_load_and_go(ctx);
 }

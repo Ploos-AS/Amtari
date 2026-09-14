@@ -22,6 +22,10 @@ TEST_M2_CROSS := $(BUILD)/test_m2_cross
 CROSS_OBJ := $(BUILD)/m2_11_real.o
 CROSS_TEXT := $(BUILD)/m2_11_real.text
 CROSS_PRG := $(BUILD)/m2_11_real.prg
+STRESS_OBJ := $(BUILD)/m2_12_stress.o
+STRESS_ELF := $(BUILD)/m2_12_stress.elf
+STRESS_TEXT := $(BUILD)/m2_12_stress.text
+STRESS_PRG := $(BUILD)/m2_12_stress.prg
 
 .PHONY: all check cross-check clean
 
@@ -75,6 +79,18 @@ $(CROSS_TEXT): $(CROSS_OBJ)
 $(CROSS_PRG): $(CROSS_TEXT) tools/make_tos_prg.py
 	python3 tools/make_tos_prg.py $(CROSS_TEXT) $@
 
+$(STRESS_OBJ): tests/fixtures/m2_12_stress.c | $(BUILD)
+	$(CROSS_CC) -m68000 -Os -ffreestanding -fno-pic -fno-pie -fno-stack-protector -fomit-frame-pointer -fno-toplevel-reorder -c $< -o $@
+
+$(STRESS_ELF): $(STRESS_OBJ)
+	$(CROSS_CC) -m68000 -nostdlib -Wl,-Ttext=0 -Wl,-e,amtari_entry -Wl,--build-id=none $< -o $@
+
+$(STRESS_TEXT): $(STRESS_ELF)
+	$(CROSS_OBJCOPY) -O binary -j .text $< $@
+
+$(STRESS_PRG): $(STRESS_TEXT) tools/make_tos_prg.py
+	python3 tools/make_tos_prg.py $(STRESS_TEXT) $@
+
 check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E) $(TEST_M2_COND) $(TEST_M2_ARITH) $(TEST_M2_ADDR) $(TEST_M2_COMPILER)
 	./$(TEST_M0)
 	./$(TEST_M1)
@@ -87,13 +103,16 @@ check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_E
 	./$(TEST_M2_ARITH)
 	./$(TEST_M2_ADDR)
 	./$(TEST_M2_COMPILER)
-	@echo "M2.10 compiler-oriented byte/word/logical host checks: PASS"
+	@echo "M2.12 host regression checks: PASS"
 
-cross-check: $(CROSS_PRG) $(TEST_M2_CROSS)
-	@echo "--- GCC-generated m68k code ---"
+cross-check: $(CROSS_PRG) $(STRESS_PRG) $(TEST_M2_CROSS)
+	@echo "--- M2.11 GCC-generated m68k code ---"
 	$(CROSS_OBJDUMP) -dr $(CROSS_OBJ)
-	./$(TEST_M2_CROSS) $(CROSS_PRG)
-	@echo "M2.11 real cross-compiled C PRG execution: PASS"
+	./$(TEST_M2_CROSS) $(CROSS_PRG) 42
+	@echo "--- M2.12 linked GCC compiler-stress code ---"
+	$(CROSS_OBJDUMP) -dr $(STRESS_ELF)
+	./$(TEST_M2_CROSS) $(STRESS_PRG) 42
+	@echo "M2.12 real cross-compiled multi-function C PRG execution: PASS"
 
 clean:
 	rm -rf $(BUILD)

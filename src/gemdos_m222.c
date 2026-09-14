@@ -14,6 +14,75 @@
 #define M222_MAX_STEPS 65536u
 #define M222_MAX_PROCESS_DEPTH 8u
 
+static int m222_reserve_arena(struct amtari_context *ctx, uint32_t basepage,
+                              uint32_t child_stack_top)
+{
+    uint32_t arena_size = child_stack_top - basepage;
+    unsigned int i;
+    int split_slot;
+    int slot;
+
+    /* Reuse a free block that already covers this exact address range. This is
+     * essential after a previous synchronous Pexec: its released arena remains
+     * reusable in the heap table and must not be shadowed by an overlapping
+     * descriptor on the next Pexec. */
+    m220_coalesce_free(ctx);
+    for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
+        struct amtari_mem_block *block = &ctx->mem_blocks[i];
+        uint32_t block_end;
+        uint32_t arena_end;
+        uint32_t prefix;
+        uint32_t suffix;
+
+        if (!block->valid || block->in_use) continue;
+        block_end = block->address + block->size;
+        arena_end = basepage + arena_size;
+        if (basepage < block->address || arena_end > block_end) continue;
+
+        prefix = basepage - block->address;
+        suffix = block_end - arena_end;
+
+        if (prefix != 0u) {
+            split_slot = m220_find_invalid_slot(ctx);
+            if (split_slot < 0) return AMTARI_ENOMEM;
+            ctx->mem_blocks[split_slot].address = block->address;
+            ctx->mem_blocks[split_slot].size = prefix;
+            ctx->mem_blocks[split_slot].owner_basepage = 0u;
+            ctx->mem_blocks[split_slot].valid = 1u;
+            ctx->mem_blocks[split_slot].in_use = 0u;
+        }
+
+        if (suffix != 0u) {
+            split_slot = m220_find_invalid_slot(ctx);
+            if (split_slot < 0) {
+                if (prefix != 0u) m220_clear_slot(&ctx->mem_blocks[split_slot]);
+                return AMTARI_ENOMEM;
+            }
+            ctx->mem_blocks[split_slot].address = arena_end;
+            ctx->mem_blocks[split_slot].size = suffix;
+            ctx->mem_blocks[split_slot].owner_basepage = 0u;
+            ctx->mem_blocks[split_slot].valid = 1u;
+            ctx->mem_blocks[split_slot].in_use = 0u;
+        }
+
+        block->address = basepage;
+        block->size = arena_size;
+        block->owner_basepage = basepage;
+        block->valid = 1u;
+        block->in_use = 1u;
+        return 0;
+    }
+
+    slot = m220_find_invalid_slot(ctx);
+    if (slot < 0) return AMTARI_ENOMEM;
+    ctx->mem_blocks[slot].address = basepage;
+    ctx->mem_blocks[slot].size = arena_size;
+    ctx->mem_blocks[slot].owner_basepage = basepage;
+    ctx->mem_blocks[slot].valid = 1u;
+    ctx->mem_blocks[slot].in_use = 1u;
+    return 0;
+}
+
 static int32_t m222_pexec_load_and_go(struct amtari_context *ctx)
 {
     uint16_t mode;
@@ -30,7 +99,6 @@ static int32_t m222_pexec_load_and_go(struct amtari_context *ctx)
     uint32_t child_stack_top;
     uint32_t steps = 0u;
     uint8_t parent_depth;
-    int arena_slot;
     int32_t load_result;
     int child_rc;
     int rc;
@@ -76,16 +144,11 @@ static int32_t m222_pexec_load_and_go(struct amtari_context *ctx)
         return AMTARI_ENOMEM;
     }
 
-    arena_slot = m220_find_invalid_slot(ctx);
-    if (arena_slot < 0) {
+    rc = m222_reserve_arena(ctx, basepage, child_stack_top);
+    if (rc != 0) {
         ctx->next_load_address = parent_next_load;
-        return AMTARI_ENOMEM;
+        return rc;
     }
-    ctx->mem_blocks[arena_slot].address = basepage;
-    ctx->mem_blocks[arena_slot].size = child_stack_top - basepage;
-    ctx->mem_blocks[arena_slot].owner_basepage = basepage;
-    ctx->mem_blocks[arena_slot].valid = 1u;
-    ctx->mem_blocks[arena_slot].in_use = 1u;
 
     if (ctx->heap_top < child_stack_top) ctx->heap_top = child_stack_top;
 

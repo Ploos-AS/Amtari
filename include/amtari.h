@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.2.3-m2"
+#define AMTARI_VERSION "0.2.4-m2"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_BASEPAGE_SIZE 256u
 #define AMTARI_EINVAL (-1)
@@ -21,6 +21,9 @@
 #define AMTARI_ENOTEMPTY (-12)
 #define AMTARI_ENOEXEC (-13)
 #define AMTARI_ENOMEM (-14)
+#define AMTARI_EILLEGAL (-15)
+#define AMTARI_EXEC_HALTED 0
+#define AMTARI_EXEC_RUNNING 1
 
 enum amtari_mode {
     AMTARI_MODE_NATIVE = 0,
@@ -140,6 +143,9 @@ int amtari_process_set_load_address(struct amtari_context *ctx, uint32_t address
 int amtari_prg_parse(const uint8_t *image, size_t image_size, struct amtari_prg_info *info);
 int32_t amtari_prg_load(struct amtari_context *ctx, const uint8_t *image, size_t image_size,
                         uint32_t basepage, const uint8_t *cmdline);
+int amtari_exec_prepare(struct amtari_context *ctx, uint32_t basepage, uint32_t stack_top);
+int amtari_exec_step(struct amtari_context *ctx);
+int amtari_exec_run(struct amtari_context *ctx, uint32_t max_steps, uint32_t *steps_executed);
 
 enum amtari_trap_kind amtari_trap_decode(unsigned int trap_number);
 int32_t amtari_gemdos_dispatch(struct amtari_context *ctx, uint16_t function);

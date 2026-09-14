@@ -67,10 +67,8 @@ int amtari_exec_step(struct amtari_context *ctx)
     pc = ctx->cpu.pc;
     if (amtari_guest_read16(ctx, pc, &opcode) != 0) return AMTARI_EFAULT;
 
-    /* NOP */
     if (opcode == 0x4e71u) { ctx->cpu.pc = pc + 2u; return AMTARI_EXEC_RUNNING; }
 
-    /* RTS */
     if (opcode == 0x4e75u) {
         uint32_t target;
         if (amtari_guest_read32(ctx, ctx->cpu.a[7], &target) != 0) return AMTARI_EFAULT;
@@ -81,7 +79,6 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
-    /* MOVEQ #imm8,Dn */
     if ((opcode & 0xf100u) == 0x7000u) {
         unsigned int reg = (unsigned int)((opcode >> 9) & 7u);
         ctx->cpu.d[reg] = (uint32_t)(int32_t)(int8_t)(opcode & 0xffu);
@@ -89,7 +86,6 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
-    /* MOVE.W #imm,-(SP) */
     if (opcode == 0x3f3cu) {
         uint16_t value;
         if (amtari_guest_read16(ctx, pc + 2u, &value) != 0) return AMTARI_EFAULT;
@@ -98,7 +94,6 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
-    /* MOVE.L #imm,-(SP) */
     if (opcode == 0x2f3cu) {
         uint32_t value;
         if (amtari_guest_read32(ctx, pc + 2u, &value) != 0) return AMTARI_EFAULT;
@@ -107,8 +102,8 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
-    /* ADDQ.[W/L] #n,An. Size does not affect address-register result. */
-    if ((opcode & 0xf0f8u) == 0x5048u || (opcode & 0xf0f8u) == 0x5088u) {
+    /* ADDQ.[W/L] #n,An. Mask keeps direction, size and addressing mode. */
+    if ((opcode & 0xf1f8u) == 0x5048u || (opcode & 0xf1f8u) == 0x5088u) {
         unsigned int reg = opcode & 7u;
         uint32_t amount = (uint32_t)((opcode >> 9) & 7u);
         if (amount == 0u) amount = 8u;
@@ -118,7 +113,7 @@ int amtari_exec_step(struct amtari_context *ctx)
     }
 
     /* SUBQ.[W/L] #n,An. */
-    if ((opcode & 0xf0f8u) == 0x5148u || (opcode & 0xf0f8u) == 0x5188u) {
+    if ((opcode & 0xf1f8u) == 0x5148u || (opcode & 0xf1f8u) == 0x5188u) {
         unsigned int reg = opcode & 7u;
         uint32_t amount = (uint32_t)((opcode >> 9) & 7u);
         if (amount == 0u) amount = 8u;
@@ -127,7 +122,6 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
-    /* BRA/BSR with 8-bit or 16-bit displacement. */
     if ((opcode & 0xff00u) == 0x6000u || (opcode & 0xff00u) == 0x6100u) {
         int32_t displacement;
         uint32_t next_pc;
@@ -151,7 +145,6 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
-    /* JSR absolute long. */
     if (opcode == 0x4eb9u) {
         uint32_t target;
         if (amtari_guest_read32(ctx, pc + 2u, &target) != 0) return AMTARI_EFAULT;
@@ -161,7 +154,6 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
-    /* TRAP #1: GEMDOS. Function word remains at guest SP for argument decoding. */
     if (opcode == 0x4e41u) {
         uint16_t function;
         int32_t result;

@@ -23,8 +23,10 @@ static int guest_write32(struct amtari_context *ctx, uint32_t address, uint32_t 
     uint8_t *p;
     if (!amtari_guest_range_valid(ctx, address, 4u)) return AMTARI_EFAULT;
     p = &ctx->memory.data[address];
-    p[0] = (uint8_t)(value >> 24); p[1] = (uint8_t)(value >> 16);
-    p[2] = (uint8_t)(value >> 8); p[3] = (uint8_t)value;
+    p[0] = (uint8_t)(value >> 24);
+    p[1] = (uint8_t)(value >> 16);
+    p[2] = (uint8_t)(value >> 8);
+    p[3] = (uint8_t)value;
     return 0;
 }
 
@@ -54,15 +56,41 @@ static void set_cmp32(struct amtari_context *ctx, uint32_t dst, uint32_t src)
 {
     uint32_t result = dst - src;
     uint16_t ccr = (uint16_t)(ctx->cpu.sr & CCR_X);
-    uint32_t sign_dst = dst >> 31;
-    uint32_t sign_src = src >> 31;
-    uint32_t sign_res = result >> 31;
-
     if (result == 0u) ccr |= CCR_Z;
-    if (sign_res != 0u) ccr |= CCR_N;
-    if (sign_dst != sign_src && sign_res != sign_dst) ccr |= CCR_V;
+    if ((result & 0x80000000u) != 0u) ccr |= CCR_N;
+    if ((((dst ^ src) & (dst ^ result)) & 0x80000000u) != 0u) ccr |= CCR_V;
     if (src > dst) ccr |= CCR_C;
     ctx->cpu.sr = (uint16_t)((ctx->cpu.sr & 0xff00u) | ccr);
+}
+
+static uint32_t add32(struct amtari_context *ctx, uint32_t dst, uint32_t src)
+{
+    uint32_t result = dst + src;
+    uint16_t ccr = 0u;
+    int carry = result < dst;
+    int overflow = (((~(dst ^ src)) & (dst ^ result)) & 0x80000000u) != 0u;
+
+    if (result == 0u) ccr |= CCR_Z;
+    if ((result & 0x80000000u) != 0u) ccr |= CCR_N;
+    if (overflow) ccr |= CCR_V;
+    if (carry) ccr |= (CCR_C | CCR_X);
+    ctx->cpu.sr = (uint16_t)((ctx->cpu.sr & 0xff00u) | ccr);
+    return result;
+}
+
+static uint32_t sub32(struct amtari_context *ctx, uint32_t dst, uint32_t src)
+{
+    uint32_t result = dst - src;
+    uint16_t ccr = 0u;
+    int borrow = src > dst;
+    int overflow = ((((dst ^ src) & (dst ^ result)) & 0x80000000u) != 0u);
+
+    if (result == 0u) ccr |= CCR_Z;
+    if ((result & 0x80000000u) != 0u) ccr |= CCR_N;
+    if (overflow) ccr |= CCR_V;
+    if (borrow) ccr |= (CCR_C | CCR_X);
+    ctx->cpu.sr = (uint16_t)((ctx->cpu.sr & 0xff00u) | ccr);
+    return result;
 }
 
 int amtari_exec_prepare(struct amtari_context *ctx, uint32_t basepage, uint32_t stack_top)
@@ -101,6 +129,23 @@ static int branch_displacement(struct amtari_context *ctx, uint32_t pc, uint16_t
         *next_pc = pc + 2u;
     }
     return 0;
+}
+
+static int condition_true(const struct amtari_context *ctx, unsigned int condition)
+{
+    int n = (ctx->cpu.sr & CCR_N) != 0u;
+    int z = (ctx->cpu.sr & CCR_Z) != 0u;
+    int v = (ctx->cpu.sr & CCR_V) != 0u;
+
+    switch (condition) {
+    case 6u: return !z;             /* BNE */
+    case 7u: return z;              /* BEQ */
+    case 12u: return n == v;        /* BGE */
+    case 13u: return n != v;        /* BLT */
+    case 14u: return !z && n == v;  /* BGT */
+    case 15u: return z || n != v;   /* BLE */
+    default: return 0;
+    }
 }
 
 int amtari_exec_step(struct amtari_context *ctx)
@@ -193,6 +238,24 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
+    /* ADD.L Dm,Dn */
+    if ((opcode & 0xf1f8u) == 0xd080u) {
+        unsigned int src = opcode & 7u;
+        unsigned int dst = (unsigned int)((opcode >> 9) & 7u);
+        ctx->cpu.d[dst] = add32(ctx, ctx->cpu.d[dst], ctx->cpu.d[src]);
+        ctx->cpu.pc = pc + 2u;
+        return AMTARI_EXEC_RUNNING;
+    }
+
+    /* SUB.L Dm,Dn */
+    if ((opcode & 0xf1f8u) == 0x9080u) {
+        unsigned int src = opcode & 7u;
+        unsigned int dst = (unsigned int)((opcode >> 9) & 7u);
+        ctx->cpu.d[dst] = sub32(ctx, ctx->cpu.d[dst], ctx->cpu.d[src]);
+        ctx->cpu.pc = pc + 2u;
+        return AMTARI_EXEC_RUNNING;
+    }
+
     if (opcode == 0x3f3cu) {
         uint16_t value;
         if (amtari_guest_read16(ctx, pc + 2u, &value) != 0) return AMTARI_EFAULT;
@@ -209,6 +272,27 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
+    /* ADDQ.L #n,Dn */
+    if ((opcode & 0xf1f8u) == 0x5080u) {
+        unsigned int reg = opcode & 7u;
+        uint32_t amount = (uint32_t)((opcode >> 9) & 7u);
+        if (amount == 0u) amount = 8u;
+        ctx->cpu.d[reg] = add32(ctx, ctx->cpu.d[reg], amount);
+        ctx->cpu.pc = pc + 2u;
+        return AMTARI_EXEC_RUNNING;
+    }
+
+    /* SUBQ.L #n,Dn */
+    if ((opcode & 0xf1f8u) == 0x5180u) {
+        unsigned int reg = opcode & 7u;
+        uint32_t amount = (uint32_t)((opcode >> 9) & 7u);
+        if (amount == 0u) amount = 8u;
+        ctx->cpu.d[reg] = sub32(ctx, ctx->cpu.d[reg], amount);
+        ctx->cpu.pc = pc + 2u;
+        return AMTARI_EXEC_RUNNING;
+    }
+
+    /* ADDQ.[W/L] #n,An */
     if ((opcode & 0xf1f8u) == 0x5048u || (opcode & 0xf1f8u) == 0x5088u) {
         unsigned int reg = opcode & 7u;
         uint32_t amount = (uint32_t)((opcode >> 9) & 7u);
@@ -218,12 +302,34 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
+    /* SUBQ.[W/L] #n,An */
     if ((opcode & 0xf1f8u) == 0x5148u || (opcode & 0xf1f8u) == 0x5188u) {
         unsigned int reg = opcode & 7u;
         uint32_t amount = (uint32_t)((opcode >> 9) & 7u);
         if (amount == 0u) amount = 8u;
         ctx->cpu.a[reg] -= amount;
         ctx->cpu.pc = pc + 2u;
+        return AMTARI_EXEC_RUNNING;
+    }
+
+    /* DBRA/DBF Dn,disp16. Only the low word is decremented. */
+    if ((opcode & 0xfff8u) == 0x51c8u) {
+        unsigned int reg = opcode & 7u;
+        uint16_t ext;
+        uint16_t low;
+        uint32_t next_pc = pc + 4u;
+        uint32_t target;
+        if (amtari_guest_read16(ctx, pc + 2u, &ext) != 0) return AMTARI_EFAULT;
+        low = (uint16_t)ctx->cpu.d[reg];
+        low = (uint16_t)(low - 1u);
+        ctx->cpu.d[reg] = (ctx->cpu.d[reg] & 0xffff0000u) | low;
+        if (low == 0xffffu) {
+            ctx->cpu.pc = next_pc;
+            return AMTARI_EXEC_RUNNING;
+        }
+        target = (uint32_t)((int32_t)next_pc + (int32_t)(int16_t)ext);
+        if (branch_target_valid(ctx, target) != 0) return AMTARI_EFAULT;
+        ctx->cpu.pc = target;
         return AMTARI_EXEC_RUNNING;
     }
 
@@ -240,21 +346,23 @@ int amtari_exec_step(struct amtari_context *ctx)
         return AMTARI_EXEC_RUNNING;
     }
 
-    /* BEQ/BNE */
-    if ((opcode & 0xff00u) == 0x6700u || (opcode & 0xff00u) == 0x6600u) {
-        int32_t displacement;
-        uint32_t next_pc, target;
-        int z = (ctx->cpu.sr & CCR_Z) != 0u;
-        int take = ((opcode & 0xff00u) == 0x6700u) ? z : !z;
-        if (branch_displacement(ctx, pc, opcode, &displacement, &next_pc) != 0) return AMTARI_EFAULT;
-        if (!take) {
-            ctx->cpu.pc = next_pc;
+    /* BNE/BEQ/BGE/BLT/BGT/BLE */
+    if ((opcode & 0xf000u) == 0x6000u) {
+        unsigned int condition = (unsigned int)((opcode >> 8) & 0x0fu);
+        if (condition == 6u || condition == 7u || condition == 12u ||
+            condition == 13u || condition == 14u || condition == 15u) {
+            int32_t displacement;
+            uint32_t next_pc, target;
+            if (branch_displacement(ctx, pc, opcode, &displacement, &next_pc) != 0) return AMTARI_EFAULT;
+            if (!condition_true(ctx, condition)) {
+                ctx->cpu.pc = next_pc;
+                return AMTARI_EXEC_RUNNING;
+            }
+            target = (uint32_t)((int32_t)next_pc + displacement);
+            if (branch_target_valid(ctx, target) != 0) return AMTARI_EFAULT;
+            ctx->cpu.pc = target;
             return AMTARI_EXEC_RUNNING;
         }
-        target = (uint32_t)((int32_t)next_pc + displacement);
-        if (branch_target_valid(ctx, target) != 0) return AMTARI_EFAULT;
-        ctx->cpu.pc = target;
-        return AMTARI_EXEC_RUNNING;
     }
 
     if (opcode == 0x4eb9u) {

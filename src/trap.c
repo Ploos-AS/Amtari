@@ -81,11 +81,20 @@ static int32_t dispatch_bios(struct amtari_context *ctx, uint16_t function)
     }
 }
 
+static int32_t xbios_random(struct amtari_context *ctx)
+{
+    ctx->random_seed = ctx->random_seed * UINT32_C(3141592621) + 1u;
+    return (int32_t)((ctx->random_seed >> 8) & UINT32_C(0x00ffffff));
+}
+
 static int32_t dispatch_xbios(struct amtari_context *ctx, uint16_t function)
 {
-    (void)ctx;
-    (void)function;
-    return AMTARI_ENOSYS;
+    switch (function) {
+    case 0x11u: /* Random */
+        return xbios_random(ctx);
+    default:
+        return AMTARI_ENOSYS;
+    }
 }
 
 enum amtari_trap_kind amtari_trap_decode(unsigned int trap_number)

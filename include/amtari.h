@@ -38,3 +38,52 @@ typedef int32_t (*amtari_fs_read_fn)(void *opaque, int16_t handle, void *buffer,
 typedef int32_t (*amtari_fs_write_fn)(void *opaque, int16_t handle, const void *buffer, uint32_t count);
 typedef int32_t (*amtari_fs_seek_fn)(void *opaque, int16_t handle, int32_t offset, uint16_t mode);
 typedef int32_t (*amtari_fs_delete_fn)(void *opaque, const char *path);
+typedef int32_t (*amtari_fs_mkdir_fn)(void *opaque, const char *path);
+typedef int32_t (*amtari_fs_rmdir_fn)(void *opaque, const char *path);
+typedef int (*amtari_program_fetch_fn)(void *opaque, const char *path, const uint8_t **data, size_t *size);
+
+struct amtari_cpu_state { uint32_t d[8]; uint32_t a[8]; uint32_t pc; uint16_t sr; };
+struct amtari_guest_memory { uint8_t *data; size_t size; };
+struct amtari_console_io { amtari_console_getc_fn getc; amtari_console_putc_fn putc; void *opaque; };
+struct amtari_fs_io {
+    amtari_fs_open_fn open; amtari_fs_create_fn create; amtari_fs_close_fn close;
+    amtari_fs_read_fn read; amtari_fs_write_fn write; amtari_fs_seek_fn seek;
+    amtari_fs_delete_fn unlink; amtari_fs_mkdir_fn mkdir; amtari_fs_rmdir_fn rmdir; void *opaque;
+};
+struct amtari_process_io { amtari_program_fetch_fn fetch; void *opaque; };
+struct amtari_prg_info { uint32_t text_size, data_size, bss_size, symbol_size, flags; uint16_t absolute; };
+
+struct amtari_context {
+    enum amtari_machine machine; enum amtari_mode mode; struct amtari_cpu_state cpu;
+    struct amtari_guest_memory memory; struct amtari_console_io console; struct amtari_fs_io fs;
+    struct amtari_process_io process; uint32_t drive_mask; uint8_t current_drive;
+    char cwd[26][AMTARI_PATH_MAX]; uint32_t next_load_address; uint32_t current_basepage; int initialized;
+};
+
+const char *amtari_version(void);
+int amtari_init(struct amtari_context *ctx);
+int amtari_guest_memory_bind(struct amtari_context *ctx, uint8_t *data, size_t size);
+int amtari_guest_range_valid(const struct amtari_context *ctx, uint32_t address, size_t length);
+int amtari_guest_read16(const struct amtari_context *ctx, uint32_t address, uint16_t *value);
+int amtari_guest_read32(const struct amtari_context *ctx, uint32_t address, uint32_t *value);
+int amtari_console_bind(struct amtari_context *ctx, amtari_console_getc_fn getc_fn, amtari_console_putc_fn putc_fn, void *opaque);
+int amtari_fs_bind(struct amtari_context *ctx, amtari_fs_open_fn open_fn, amtari_fs_create_fn create_fn,
+                   amtari_fs_close_fn close_fn, amtari_fs_read_fn read_fn, amtari_fs_write_fn write_fn,
+                   amtari_fs_seek_fn seek_fn, amtari_fs_delete_fn delete_fn, amtari_fs_mkdir_fn mkdir_fn,
+                   amtari_fs_rmdir_fn rmdir_fn, void *opaque);
+int amtari_fs_set_drives(struct amtari_context *ctx, uint32_t drive_mask, uint8_t current_drive);
+int amtari_path_translate(const struct amtari_context *ctx, uint32_t guest_address, char *output, size_t output_size);
+int32_t amtari_gemdos_error_from_host(int32_t host_error);
+int amtari_program_bind(struct amtari_context *ctx, amtari_program_fetch_fn fetch_fn, void *opaque);
+int amtari_process_set_load_address(struct amtari_context *ctx, uint32_t address);
+int amtari_prg_parse(const uint8_t *image, size_t image_size, struct amtari_prg_info *info);
+int32_t amtari_prg_load(struct amtari_context *ctx, const uint8_t *image, size_t image_size, uint32_t basepage, const uint8_t *cmdline);
+int amtari_exec_prepare(struct amtari_context *ctx, uint32_t basepage, uint32_t stack_top);
+int amtari_exec_step(struct amtari_context *ctx);
+int amtari_exec_run(struct amtari_context *ctx, uint32_t max_steps, uint32_t *steps_executed);
+
+enum amtari_trap_kind amtari_trap_decode(unsigned int trap_number);
+int32_t amtari_gemdos_dispatch(struct amtari_context *ctx, uint16_t function);
+int32_t amtari_trap_dispatch(struct amtari_context *ctx, unsigned int trap_number, uint16_t function);
+
+#endif

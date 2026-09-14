@@ -4,6 +4,10 @@ volatile int m214_zeroed;
 
 int amtari_entry(void)
 {
-    m214_zeroed = 2;
-    return m214_initialized + m214_zeroed;
+    volatile int *initialized = &m214_initialized;
+    volatile int *zeroed = &m214_zeroed;
+
+    __asm__ volatile ("" : "+a" (initialized), "+a" (zeroed));
+    *zeroed = 2;
+    return *initialized + *zeroed;
 }

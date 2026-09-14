@@ -11,10 +11,11 @@ TEST_M2_FS := $(BUILD)/test_m2_fs
 TEST_M2_PRG := $(BUILD)/test_m2_prg
 TEST_M2_EXEC := $(BUILD)/test_m2_exec
 TEST_M2_E2E := $(BUILD)/test_m2_e2e
+TEST_M2_COND := $(BUILD)/test_m2_cond
 
 .PHONY: all check clean
 
-all: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E)
+all: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E) $(TEST_M2_COND)
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -40,7 +41,10 @@ $(TEST_M2_EXEC): $(COMMON_SRC) tests/test_m2_exec.c include/amtari.h | $(BUILD)
 $(TEST_M2_E2E): $(COMMON_SRC) tests/test_m2_e2e.c include/amtari.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m2_e2e.c -o $(TEST_M2_E2E)
 
-check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E)
+$(TEST_M2_COND): $(COMMON_SRC) tests/test_m2_cond.c include/amtari.h | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m2_cond.c -o $(TEST_M2_COND)
+
+check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E) $(TEST_M2_COND)
 	./$(TEST_M0)
 	./$(TEST_M1)
 	./$(TEST_M2)
@@ -48,7 +52,8 @@ check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_E
 	./$(TEST_M2_PRG)
 	./$(TEST_M2_EXEC)
 	./$(TEST_M2_E2E)
-	@echo "M2.6 end-to-end PRG host checks: PASS"
+	./$(TEST_M2_COND)
+	@echo "M2.7 conditional execution host checks: PASS"
 
 clean:
 	rm -rf $(BUILD)

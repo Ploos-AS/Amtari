@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.2.24-m2"
+#define AMTARI_VERSION "0.2.25-m2"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_BASEPAGE_SIZE 256u
 #define AMTARI_MEM_BLOCK_MAX 32u
@@ -74,11 +74,13 @@ struct amtari_context {
     struct amtari_process_io process; uint32_t drive_mask; uint8_t current_drive;
     char cwd[26][AMTARI_PATH_MAX]; uint32_t next_load_address; uint32_t current_basepage;
     struct amtari_mem_block mem_blocks[AMTARI_MEM_BLOCK_MAX]; uint32_t heap_top;
+    uint32_t random_seed;
     uint8_t process_depth; int initialized;
 };
 
 const char *amtari_version(void);
 int amtari_init(struct amtari_context *ctx);
+int amtari_random_seed(struct amtari_context *ctx, uint32_t seed);
 int amtari_guest_memory_bind(struct amtari_context *ctx, uint8_t *data, size_t size);
 int amtari_guest_range_valid(const struct amtari_context *ctx, uint32_t address, size_t length);
 int amtari_guest_read16(const struct amtari_context *ctx, uint32_t address, uint16_t *value);

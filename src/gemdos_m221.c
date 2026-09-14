@@ -6,9 +6,15 @@
  * Child-owned blocks are still reclaimed automatically when synchronous
  * Pexec(0) returns via the M2.20 lifecycle path.
  */
-#define amtari_gemdos_dispatch amtari_gemdos_dispatch_m220
+
+/* Build the M2.20 dispatcher under a private name. gemdos_m216.c internally
+ * composes the older M2.14 dispatcher, so use its supported rename hook rather
+ * than renaming the public symbol with a preprocessor macro. */
+#define AMTARI_M220_DISPATCH_NAME amtari_gemdos_dispatch_m220
+#define AMTARI_GEMDOS_DISPATCH_NAME AMTARI_M220_DISPATCH_NAME
 #include "gemdos_m216.c"
-#undef amtari_gemdos_dispatch
+#undef AMTARI_GEMDOS_DISPATCH_NAME
+#undef AMTARI_M220_DISPATCH_NAME
 
 static int m221_lookup_block(const struct amtari_context *ctx, uint32_t address)
 {

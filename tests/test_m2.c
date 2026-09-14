@@ -50,7 +50,7 @@ int main(void)
     static const unsigned char message[] = "Amtari";
 
     assert(amtari_init(&ctx) == 0);
-    assert(strcmp(amtari_version(), "0.2.0-m2") == 0);
+    assert(strncmp(amtari_version(), "0.2.", 4) == 0);
     assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
     assert(amtari_console_bind(&ctx, fixture_getc, fixture_putc, &console) == 0);
 

@@ -4,6 +4,13 @@
  * and MOVEM.  The core symbols are renamed locally, then the public step/run
  * entry points route M2.13 opcodes through the extension first.
  */
+#ifndef AMTARI_M213_STEP_NAME
+#define AMTARI_M213_STEP_NAME amtari_exec_step
+#endif
+#ifndef AMTARI_M213_RUN_NAME
+#define AMTARI_M213_RUN_NAME amtari_exec_run
+#endif
+
 #define amtari_exec_step amtari_exec_step_m212
 #define amtari_exec_run amtari_exec_run_m212
 #include "exec.c"
@@ -28,9 +35,7 @@ static int m213_indexed_address(struct amtari_context *ctx, uint32_t base,
     uint32_t index;
     int32_t displacement;
 
-    /* 68000 brief extension only: no scale/full-format bits. */
     if ((ext & 0x0700u) != 0u) return AMTARI_EILLEGAL;
-
     index_reg = (unsigned int)((ext >> 12) & 7u);
     index = (ext & 0x8000u) ? ctx->cpu.a[index_reg] : ctx->cpu.d[index_reg];
     if ((ext & 0x0800u) == 0u) index = (uint32_t)(int32_t)(int16_t)index;
@@ -44,11 +49,9 @@ static int m213_indexed_ea(struct amtari_context *ctx, unsigned int mode,
 {
     uint16_t ext;
     uint32_t base;
-
     if (mode == 6u) base = ctx->cpu.a[reg];
     else if (mode == 7u && reg == 3u) base = *ext_pc;
     else return AMTARI_EILLEGAL;
-
     if (amtari_guest_read16(ctx, *ext_pc, &ext) != 0) return AMTARI_EFAULT;
     *ext_pc += 2u;
     return m213_indexed_address(ctx, base, ext, address);
@@ -134,20 +137,17 @@ static int m213_movem(struct amtari_context *ctx, uint16_t opcode, uint32_t pc)
     if ((opcode & 0xfb80u) != 0x4880u) return AMTARI_EILLEGAL;
     mode = (unsigned int)((opcode >> 3) & 7u);
     reg = opcode & 7u;
-    if (mode == 0u || mode == 1u) return AMTARI_EILLEGAL; /* EXT lives here. */
-
-    direction = (opcode & 0x0400u) != 0u; /* 0 regs->mem, 1 mem->regs */
+    if (mode == 0u || mode == 1u) return AMTARI_EILLEGAL;
+    direction = (opcode & 0x0400u) != 0u;
     size = (opcode & 0x0040u) ? 4u : 2u;
     if (!direction && mode == 3u) return AMTARI_EILLEGAL;
     if (direction && mode == 4u) return AMTARI_EILLEGAL;
-
     if (amtari_guest_read16(ctx, pc + 2u, &mask) != 0) return AMTARI_EFAULT;
     ext_pc = pc + 4u;
     rc = m213_movem_base(ctx, mode, reg, &ext_pc, &address);
     if (rc != 0) return rc;
 
     if (!direction && mode == 4u) {
-        /* Predecrement has the reversed register-mask encoding on 68000. */
         for (bit = 0u; bit < 16u; ++bit) {
             if ((mask & (uint16_t)(1u << bit)) != 0u) {
                 unsigned int logical = 15u - bit;
@@ -180,7 +180,6 @@ static int m213_movem(struct amtari_context *ctx, uint16_t opcode, uint32_t pc)
         }
         if (mode == 3u) ctx->cpu.a[reg] = address;
     }
-
     ctx->cpu.pc = ext_pc;
     return AMTARI_EXEC_RUNNING;
 }
@@ -191,7 +190,6 @@ static int m213_indexed_instruction(struct amtari_context *ctx, uint16_t opcode,
     unsigned int reg = opcode & 7u;
     int source_indexed = (mode == 6u || (mode == 7u && reg == 3u));
 
-    /* MOVE/MOVEA: source and destination have independent EA encodings. */
     if ((opcode & 0xc000u) == 0u && (opcode & 0x3000u) != 0u) {
         unsigned int top = (unsigned int)((opcode >> 12) & 3u);
         unsigned int size = (top == 1u) ? 1u : (top == 2u) ? 4u : 2u;
@@ -216,7 +214,7 @@ static int m213_indexed_instruction(struct amtari_context *ctx, uint16_t opcode,
         return AMTARI_EXEC_RUNNING;
     }
 
-    if ((opcode & 0xffc0u) == 0x4840u && source_indexed) { /* PEA */
+    if ((opcode & 0xffc0u) == 0x4840u && source_indexed) {
         uint32_t ext_pc = pc + 2u, address;
         int rc = m213_control_ea(ctx, mode, reg, &ext_pc, &address);
         if (rc != 0) return rc;
@@ -224,7 +222,7 @@ static int m213_indexed_instruction(struct amtari_context *ctx, uint16_t opcode,
         ctx->cpu.pc = ext_pc;
         return AMTARI_EXEC_RUNNING;
     }
-    if ((opcode & 0xf1c0u) == 0x41c0u && source_indexed) { /* LEA */
+    if ((opcode & 0xf1c0u) == 0x41c0u && source_indexed) {
         unsigned int dst = (unsigned int)((opcode >> 9) & 7u);
         uint32_t ext_pc = pc + 2u, address;
         int rc = m213_control_ea(ctx, mode, reg, &ext_pc, &address);
@@ -233,7 +231,7 @@ static int m213_indexed_instruction(struct amtari_context *ctx, uint16_t opcode,
         ctx->cpu.pc = ext_pc;
         return AMTARI_EXEC_RUNNING;
     }
-    if ((opcode & 0xffc0u) == 0x4e80u && source_indexed) { /* JSR */
+    if ((opcode & 0xffc0u) == 0x4e80u && source_indexed) {
         uint32_t ext_pc = pc + 2u, target;
         int rc = m213_control_ea(ctx, mode, reg, &ext_pc, &target);
         if (rc != 0) return rc;
@@ -242,8 +240,7 @@ static int m213_indexed_instruction(struct amtari_context *ctx, uint16_t opcode,
         ctx->cpu.pc = target;
         return AMTARI_EXEC_RUNNING;
     }
-
-    if ((opcode & 0xff00u) == 0x4a00u && source_indexed) { /* TST */
+    if ((opcode & 0xff00u) == 0x4a00u && source_indexed) {
         unsigned int size;
         uint32_t ext_pc = pc + 2u, value;
         int rc;
@@ -254,8 +251,6 @@ static int m213_indexed_instruction(struct amtari_context *ctx, uint16_t opcode,
         ctx->cpu.pc = ext_pc;
         return AMTARI_EXEC_RUNNING;
     }
-
-    /* CMP/OR/AND/ADD/SUB with an indexed source EA and Dn/An destination. */
     if (source_indexed && ((opcode & 0xf000u) == 0xb000u ||
                            (opcode & 0xf000u) == 0x8000u ||
                            (opcode & 0xf000u) == 0xc000u ||
@@ -267,7 +262,6 @@ static int m213_indexed_instruction(struct amtari_context *ctx, uint16_t opcode,
         uint32_t ext_pc = pc + 2u, src, value;
         unsigned int size;
         int rc;
-
         if ((family == 0xd000u || family == 0x9000u) && (opmode == 3u || opmode == 7u)) {
             size = (opmode == 3u) ? 2u : 4u;
             rc = m213_ea_read(ctx, mode, reg, size, &ext_pc, &src);
@@ -297,11 +291,10 @@ static int m213_indexed_instruction(struct amtari_context *ctx, uint16_t opcode,
         ctx->cpu.pc = ext_pc;
         return AMTARI_EXEC_RUNNING;
     }
-
     return AMTARI_EILLEGAL;
 }
 
-int amtari_exec_step(struct amtari_context *ctx)
+int AMTARI_M213_STEP_NAME(struct amtari_context *ctx)
 {
     uint16_t opcode;
     uint32_t pc;
@@ -309,7 +302,6 @@ int amtari_exec_step(struct amtari_context *ctx)
     if (ctx == 0 || !ctx->initialized) return AMTARI_EINVAL;
     pc = ctx->cpu.pc;
     if (amtari_guest_read16(ctx, pc, &opcode) != 0) return AMTARI_EFAULT;
-
     rc = m213_movem(ctx, opcode, pc);
     if (rc != AMTARI_EILLEGAL) return rc;
     rc = m213_indexed_instruction(ctx, opcode, pc);
@@ -317,12 +309,12 @@ int amtari_exec_step(struct amtari_context *ctx)
     return amtari_exec_step_m212(ctx);
 }
 
-int amtari_exec_run(struct amtari_context *ctx, uint32_t max_steps, uint32_t *steps_executed)
+int AMTARI_M213_RUN_NAME(struct amtari_context *ctx, uint32_t max_steps, uint32_t *steps_executed)
 {
     uint32_t steps = 0u;
     if (ctx == 0 || max_steps == 0u) return AMTARI_EINVAL;
     while (steps < max_steps) {
-        int rc = amtari_exec_step(ctx);
+        int rc = AMTARI_M213_STEP_NAME(ctx);
         ++steps;
         if (rc != AMTARI_EXEC_RUNNING) {
             if (steps_executed != 0) *steps_executed = steps;

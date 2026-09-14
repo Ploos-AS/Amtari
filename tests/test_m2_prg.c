@@ -134,8 +134,8 @@ int main(void)
     assert(ctx.current_basepage == (uint32_t)basepage);
     assert(ctx.cpu.pc == tbase);
 
-    /* Unsupported Pexec modes must not pretend to execute yet. */
-    put16(&memory[0x102], 0u);
+    /* Pexec(0) is implemented by M2.16; an unsupported mode must still fail. */
+    put16(&memory[0x102], 5u);
     assert(amtari_gemdos_dispatch(&ctx, 0x4b) == AMTARI_ENOSYS);
 
     return 0;

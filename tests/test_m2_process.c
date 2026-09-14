@@ -122,7 +122,7 @@ int main(void)
     uint32_t heap_before_child;
 
     assert(amtari_init(&ctx) == 0);
-    assert(strcmp(amtari_version(), "0.2.23-m2") == 0);
+    assert(strcmp(amtari_version(), "0.2.24-m2") == 0);
     assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
     assert(amtari_program_bind(&ctx, fetch_program, &fixture) == 0);
 

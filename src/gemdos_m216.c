@@ -1,19 +1,18 @@
-/* M2.17 GEMDOS process extension: bounded nested Pexec(0).
+/* M2.18 GEMDOS process extension: reserved process blocks + bounded nested Pexec(0).
  *
- * Each synchronous Pexec call keeps its parent state on the host C stack,
- * reserves a private guest stack block, advances the child allocation high-water
- * mark past that stack, and restores the parent allocation/state on return.
- * This permits child -> grandchild execution without overlapping guest stacks.
+ * The PRG loader now owns process-block allocation semantics. Pexec(0) requests
+ * a private tail reservation for the guest stack, p_hitpa describes the actual
+ * allocation high address, and nested children start after that complete block.
  */
 #define AMTARI_M214_DISPATCH_NAME amtari_gemdos_dispatch_m214
 #include "gemdos_m214.c"
 #undef AMTARI_M214_DISPATCH_NAME
 
-#define M217_STACK_RESERVE 4096u
-#define M217_MAX_STEPS 65536u
-#define M217_MAX_PROCESS_DEPTH 8u
+#define M218_STACK_RESERVE 4096u
+#define M218_MAX_STEPS 65536u
+#define M218_MAX_PROCESS_DEPTH 8u
 
-static int32_t m217_pexec_load_and_go(struct amtari_context *ctx)
+static int32_t m218_pexec_load_and_go(struct amtari_context *ctx)
 {
     uint16_t mode;
     uint32_t name, cmdline_address, env;
@@ -37,7 +36,7 @@ static int32_t m217_pexec_load_and_go(struct amtari_context *ctx)
         return AMTARI_EFAULT;
     (void)env;
     if (mode != 0u) return AMTARI_ENOSYS;
-    if (ctx->process_depth >= M217_MAX_PROCESS_DEPTH) return AMTARI_ENOSYS;
+    if (ctx->process_depth >= M218_MAX_PROCESS_DEPTH) return AMTARI_ENOSYS;
     if (ctx->process.fetch == 0) return AMTARI_EIO;
 
     rc = amtari_path_translate(ctx, name, path, sizeof(path));
@@ -60,25 +59,20 @@ static int32_t m217_pexec_load_and_go(struct amtari_context *ctx)
     parent_depth = ctx->process_depth;
     basepage = parent_next_load;
 
-    load_result = amtari_prg_load(ctx, image, image_size, basepage, cmdline);
+    load_result = amtari_prg_load_reserved(ctx, image, image_size, basepage, cmdline,
+                                          M218_STACK_RESERVE);
     if (load_result < 0) return load_result;
-    if (ctx->next_load_address > UINT32_MAX - M217_STACK_RESERVE) {
-        ctx->next_load_address = parent_next_load;
-        return AMTARI_ENOMEM;
-    }
-    child_stack_top = ctx->next_load_address + M217_STACK_RESERVE;
+
+    child_stack_top = ctx->next_load_address;
     if (child_stack_top < 4u ||
         !amtari_guest_range_valid(ctx, child_stack_top - 4u, 4u)) {
         ctx->next_load_address = parent_next_load;
         return AMTARI_ENOMEM;
     }
 
-    /* Reserve image + stack before entering the child. A nested Pexec therefore
-     * starts above this child's private stack rather than inside it. */
-    ctx->next_load_address = child_stack_top;
     ctx->process_depth = (uint8_t)(parent_depth + 1u);
     rc = amtari_exec_prepare(ctx, basepage, child_stack_top);
-    if (rc == 0) child_rc = amtari_exec_run(ctx, M217_MAX_STEPS, &steps);
+    if (rc == 0) child_rc = amtari_exec_run(ctx, M218_MAX_STEPS, &steps);
     else child_rc = rc;
 
     if (child_rc == AMTARI_EXEC_HALTED) child_rc = (int32_t)ctx->cpu.d[0];
@@ -98,5 +92,5 @@ int32_t amtari_gemdos_dispatch(struct amtari_context *ctx, uint16_t function)
     if (function != 0x4bu) return amtari_gemdos_dispatch_m214(ctx, function);
     if (read_arg16(ctx, 0u, &mode) != 0) return AMTARI_EFAULT;
     if (mode != 0u) return amtari_gemdos_dispatch_m214(ctx, function);
-    return m217_pexec_load_and_go(ctx);
+    return m218_pexec_load_and_go(ctx);
 }

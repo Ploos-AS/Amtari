@@ -126,10 +126,36 @@ static void test_bios_console_and_drvmap(void)
     assert(amtari_trap_dispatch(&ctx, 13u, 0x0au) == 5);
 }
 
+static void test_xbios_random(void)
+{
+    struct amtari_context ctx = {0};
+    int32_t first;
+    int32_t second;
+    int32_t third;
+
+    assert(amtari_init(&ctx) == 0);
+    assert(amtari_random_seed(&ctx, 1u) == 0);
+
+    first = amtari_trap_dispatch(&ctx, 14u, 0x11u);
+    second = amtari_trap_dispatch(&ctx, 14u, 0x11u);
+    third = amtari_trap_dispatch(&ctx, 14u, 0x11u);
+
+    assert(first == 0x00bb40e6);
+    assert(second == 0x005eb5ca);
+    assert(third == 0x004c4530);
+    assert((first & ~0x00ffffff) == 0);
+    assert((second & ~0x00ffffff) == 0);
+    assert((third & ~0x00ffffff) == 0);
+
+    assert(amtari_random_seed(&ctx, 1u) == 0);
+    assert(amtari_trap_dispatch(&ctx, 14u, 0x11u) == first);
+}
+
 int main(void)
 {
     test_guest_memory();
     test_traps();
     test_bios_console_and_drvmap();
+    test_xbios_random();
     return 0;
 }

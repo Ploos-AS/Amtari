@@ -28,10 +28,6 @@ int main(void)
     assert(strcmp(amtari_version(), "0.2.7-m2") == 0);
     assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
 
-    /* MOVEQ #0,D0 ; TST.L D0 ; BNE fail ; MOVEQ #7,D1 ; CMPI.L #7,D1 ;
-       BNE fail ; MOVE.L #0x12345678,D2 ; MOVE.L D2,(A0) ; MOVE.L (A0),D3 ;
-       CMPI.L #0x12345678,D3 ; BEQ success ; fail: MOVEQ #-1,D4 ; RTS ;
-       success: MOVEQ #42,D4 ; RTS */
     ctx.cpu.pc = 0x100u;
     ctx.cpu.a[0] = 0x500u;
     ctx.cpu.a[7] = 0x7fcu;
@@ -40,12 +36,12 @@ int main(void)
     put16(memory, 0x100u, 0x7000u);              /* MOVEQ #0,D0 */
     put16(memory, 0x102u, 0x4a80u);              /* TST.L D0 */
     put16(memory, 0x104u, 0x6600u);              /* BNE.w fail */
-    put16(memory, 0x106u, 0x0024u);
+    put16(memory, 0x106u, 0x0020u);              /* 0x108 + 0x20 = 0x128 */
     put16(memory, 0x108u, 0x7207u);              /* MOVEQ #7,D1 */
     put16(memory, 0x10au, 0x0c81u);              /* CMPI.L #7,D1 */
     put32(memory, 0x10cu, 7u);
     put16(memory, 0x110u, 0x6600u);              /* BNE.w fail */
-    put16(memory, 0x112u, 0x0016u);
+    put16(memory, 0x112u, 0x0014u);              /* 0x114 + 0x14 = 0x128 */
     put16(memory, 0x114u, 0x243cu);              /* MOVE.L #imm,D2 */
     put32(memory, 0x116u, 0x12345678u);
     put16(memory, 0x11au, 0x2082u);              /* MOVE.L D2,(A0) */
@@ -53,7 +49,7 @@ int main(void)
     put16(memory, 0x11eu, 0x0c83u);              /* CMPI.L #imm,D3 */
     put32(memory, 0x120u, 0x12345678u);
     put16(memory, 0x124u, 0x6700u);              /* BEQ.w success */
-    put16(memory, 0x126u, 0x0006u);
+    put16(memory, 0x126u, 0x0004u);              /* 0x128 + 4 = 0x12c */
     put16(memory, 0x128u, 0x78ffu);              /* fail: MOVEQ #-1,D4 */
     put16(memory, 0x12au, 0x4e75u);              /* RTS */
     put16(memory, 0x12cu, 0x782au);              /* success: MOVEQ #42,D4 */

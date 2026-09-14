@@ -5,6 +5,20 @@ static int bios_read_arg16(const struct amtari_context *ctx, uint32_t offset, ui
     return amtari_guest_read16(ctx, ctx->cpu.a[7] + 2u + offset, value);
 }
 
+static int32_t bios_bconstat(struct amtari_context *ctx)
+{
+    uint16_t dev;
+    int ready;
+
+    if (bios_read_arg16(ctx, 0u, &dev) != 0) return AMTARI_EFAULT;
+    if (dev != 2u) return AMTARI_ENOSYS;
+    if (ctx->console.input_ready == 0) return AMTARI_EIO;
+
+    ready = ctx->console.input_ready(ctx->console.opaque);
+    if (ready < 0) return AMTARI_EIO;
+    return ready ? -1 : 0;
+}
+
 static int32_t bios_bconin(struct amtari_context *ctx)
 {
     uint16_t dev;
@@ -35,13 +49,31 @@ static int32_t bios_bconout(struct amtari_context *ctx)
                : 0;
 }
 
+static int32_t bios_bcostat(struct amtari_context *ctx)
+{
+    uint16_t dev;
+    int ready;
+
+    if (bios_read_arg16(ctx, 0u, &dev) != 0) return AMTARI_EFAULT;
+    if (dev != 2u) return AMTARI_ENOSYS;
+    if (ctx->console.output_ready == 0) return AMTARI_EIO;
+
+    ready = ctx->console.output_ready(ctx->console.opaque);
+    if (ready < 0) return AMTARI_EIO;
+    return ready ? -1 : 0;
+}
+
 static int32_t dispatch_bios(struct amtari_context *ctx, uint16_t function)
 {
     switch (function) {
+    case 0x01u: /* Bconstat */
+        return bios_bconstat(ctx);
     case 0x02u: /* Bconin */
         return bios_bconin(ctx);
     case 0x03u: /* Bconout */
         return bios_bconout(ctx);
+    case 0x08u: /* Bcostat */
+        return bios_bcostat(ctx);
     case 0x0au: /* Drvmap */
         return (int32_t)ctx->drive_mask;
     default:

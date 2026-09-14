@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.2.25-m2"
+#define AMTARI_VERSION "0.2.26-m2"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_BASEPAGE_SIZE 256u
 #define AMTARI_MEM_BLOCK_MAX 32u
@@ -33,6 +33,7 @@ enum amtari_trap_kind { AMTARI_TRAP_UNKNOWN = 0, AMTARI_TRAP_GEMDOS, AMTARI_TRAP
 typedef int (*amtari_console_getc_fn)(void *opaque);
 typedef int (*amtari_console_putc_fn)(void *opaque, unsigned char ch);
 typedef int (*amtari_console_status_fn)(void *opaque);
+typedef int (*amtari_clock_get_fn)(void *opaque, uint32_t *tos_datetime);
 typedef int32_t (*amtari_fs_open_fn)(void *opaque, const char *path, uint16_t mode);
 typedef int32_t (*amtari_fs_create_fn)(void *opaque, const char *path, uint16_t attr);
 typedef int32_t (*amtari_fs_close_fn)(void *opaque, int16_t handle);
@@ -53,6 +54,7 @@ struct amtari_console_io {
     amtari_console_status_fn output_ready;
     void *opaque;
 };
+struct amtari_clock_io { amtari_clock_get_fn get; void *opaque; };
 struct amtari_fs_io {
     amtari_fs_open_fn open; amtari_fs_create_fn create; amtari_fs_close_fn close;
     amtari_fs_read_fn read; amtari_fs_write_fn write; amtari_fs_seek_fn seek;
@@ -70,8 +72,8 @@ struct amtari_mem_block {
 
 struct amtari_context {
     enum amtari_machine machine; enum amtari_mode mode; struct amtari_cpu_state cpu;
-    struct amtari_guest_memory memory; struct amtari_console_io console; struct amtari_fs_io fs;
-    struct amtari_process_io process; uint32_t drive_mask; uint8_t current_drive;
+    struct amtari_guest_memory memory; struct amtari_console_io console; struct amtari_clock_io clock;
+    struct amtari_fs_io fs; struct amtari_process_io process; uint32_t drive_mask; uint8_t current_drive;
     char cwd[26][AMTARI_PATH_MAX]; uint32_t next_load_address; uint32_t current_basepage;
     struct amtari_mem_block mem_blocks[AMTARI_MEM_BLOCK_MAX]; uint32_t heap_top;
     uint32_t random_seed;
@@ -81,6 +83,7 @@ struct amtari_context {
 const char *amtari_version(void);
 int amtari_init(struct amtari_context *ctx);
 int amtari_random_seed(struct amtari_context *ctx, uint32_t seed);
+int amtari_clock_bind(struct amtari_context *ctx, amtari_clock_get_fn get_fn, void *opaque);
 int amtari_guest_memory_bind(struct amtari_context *ctx, uint8_t *data, size_t size);
 int amtari_guest_range_valid(const struct amtari_context *ctx, uint32_t address, size_t length);
 int amtari_guest_read16(const struct amtari_context *ctx, uint32_t address, uint16_t *value);

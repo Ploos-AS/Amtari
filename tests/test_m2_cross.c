@@ -39,10 +39,12 @@ int main(int argc, char **argv)
     uint8_t *image;
     size_t image_size = 0u;
     uint32_t steps = 0u;
+    uint32_t expected;
     int32_t basepage;
     int rc;
 
-    assert(argc == 2);
+    assert(argc == 3);
+    expected = (uint32_t)strtoul(argv[2], 0, 0);
     assert(amtari_init(&ctx) == 0);
     assert(strncmp(amtari_version(), "0.2.", 4u) == 0);
     assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
@@ -59,16 +61,16 @@ int main(int argc, char **argv)
     assert(basepage == 0x1000);
     free(image);
 
-    /* Use a dedicated stack above the loaded image. The compiled function
-       returns with RTS to Amtari's zero sentinel. */
     assert(amtari_exec_prepare(&ctx, (uint32_t)basepage, 0xf000u) == 0);
-    rc = amtari_exec_run(&ctx, 4096u, &steps);
+    rc = amtari_exec_run(&ctx, 16384u, &steps);
     if (rc == AMTARI_EILLEGAL) {
-        fprintf(stderr, "M2.11 illegal opcode at PC=0x%08lx after %lu steps\n",
-                (unsigned long)ctx.cpu.pc, (unsigned long)steps);
+        uint16_t opcode = 0u;
+        (void)amtari_guest_read16(&ctx, ctx.cpu.pc, &opcode);
+        fprintf(stderr, "cross PRG illegal opcode 0x%04x at PC=0x%08lx after %lu steps\n",
+                (unsigned int)opcode, (unsigned long)ctx.cpu.pc, (unsigned long)steps);
     }
     assert(rc == AMTARI_EXEC_HALTED);
-    assert(ctx.cpu.d[0] == 42u);
+    assert(ctx.cpu.d[0] == expected);
     assert(steps > 0u);
 
     return 0;

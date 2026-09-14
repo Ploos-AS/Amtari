@@ -23,6 +23,11 @@ static void put32(uint8_t *p, uint32_t value)
     p[3] = (uint8_t)value;
 }
 
+static uint32_t align16(uint32_t value)
+{
+    return (value + 15u) & ~15u;
+}
+
 int amtari_program_bind(struct amtari_context *ctx, amtari_program_fetch_fn fetch_fn, void *opaque)
 {
     if (ctx == 0) {
@@ -113,15 +118,17 @@ static int relocate(struct amtari_context *ctx, const uint8_t *image, size_t ima
     }
 }
 
-int32_t amtari_prg_load(struct amtari_context *ctx, const uint8_t *image, size_t image_size,
-                        uint32_t basepage, const uint8_t *cmdline)
+int32_t amtari_prg_load_reserved(struct amtari_context *ctx, const uint8_t *image, size_t image_size,
+                                uint32_t basepage, const uint8_t *cmdline, uint32_t tail_reserve)
 {
     struct amtari_prg_info info;
     uint32_t tbase;
     uint32_t dbase;
     uint32_t bbase;
-    uint32_t hitpa;
-    uint64_t total;
+    uint32_t image_end;
+    uint32_t allocation_top;
+    uint64_t image_total;
+    uint64_t allocation_total;
     size_t command_length = 0u;
     int rc;
 
@@ -136,20 +143,35 @@ int32_t amtari_prg_load(struct amtari_context *ctx, const uint8_t *image, size_t
     tbase = basepage + AMTARI_BASEPAGE_SIZE;
     dbase = tbase + info.text_size;
     bbase = dbase + info.data_size;
-    total = (uint64_t)AMTARI_BASEPAGE_SIZE + info.text_size + info.data_size + info.bss_size;
-    if (total > UINT32_MAX) {
+    image_total = (uint64_t)AMTARI_BASEPAGE_SIZE + info.text_size + info.data_size + info.bss_size;
+    if (image_total > UINT32_MAX) {
         return AMTARI_ENOMEM;
     }
-    hitpa = basepage + (uint32_t)total;
-    if (hitpa < basepage || !amtari_guest_range_valid(ctx, basepage, (size_t)total)) {
+    image_end = basepage + (uint32_t)image_total;
+    if (image_end < basepage) {
         return AMTARI_ENOMEM;
     }
 
-    memset(&ctx->memory.data[basepage], 0, (size_t)total);
+    allocation_top = align16(image_end);
+    if (allocation_top < image_end || allocation_top > UINT32_MAX - tail_reserve) {
+        return AMTARI_ENOMEM;
+    }
+    allocation_top += tail_reserve;
+    allocation_top = align16(allocation_top);
+    if (allocation_top < basepage) {
+        return AMTARI_ENOMEM;
+    }
+    allocation_total = (uint64_t)allocation_top - basepage;
+    if (allocation_total > SIZE_MAX ||
+        !amtari_guest_range_valid(ctx, basepage, (size_t)allocation_total)) {
+        return AMTARI_ENOMEM;
+    }
+
+    memset(&ctx->memory.data[basepage], 0, (size_t)allocation_total);
     memcpy(&ctx->memory.data[tbase], &image[PRG_HEADER_SIZE], info.text_size + info.data_size);
 
     put32(&ctx->memory.data[basepage + 0x00u], basepage);
-    put32(&ctx->memory.data[basepage + 0x04u], hitpa);
+    put32(&ctx->memory.data[basepage + 0x04u], allocation_top);
     put32(&ctx->memory.data[basepage + 0x08u], tbase);
     put32(&ctx->memory.data[basepage + 0x0cu], info.text_size);
     put32(&ctx->memory.data[basepage + 0x10u], dbase);
@@ -173,6 +195,12 @@ int32_t amtari_prg_load(struct amtari_context *ctx, const uint8_t *image, size_t
         return rc;
     }
 
-    ctx->next_load_address = (hitpa + 15u) & ~15u;
+    ctx->next_load_address = allocation_top;
     return (int32_t)basepage;
+}
+
+int32_t amtari_prg_load(struct amtari_context *ctx, const uint8_t *image, size_t image_size,
+                        uint32_t basepage, const uint8_t *cmdline)
+{
+    return amtari_prg_load_reserved(ctx, image, image_size, basepage, cmdline, 0u);
 }

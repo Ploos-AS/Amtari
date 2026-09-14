@@ -69,6 +69,33 @@ static void setup_parent_pexec(uint8_t *memory, struct amtari_context *ctx)
     put32(memory, 0x040cu, 0x0000u);
 }
 
+static int32_t call_malloc(uint8_t *memory, struct amtari_context *ctx, uint32_t amount)
+{
+    ctx->cpu.a[7] = 0x0500u;
+    put16(memory, 0x0500u, 0x0048u);
+    put32(memory, 0x0502u, amount);
+    return amtari_gemdos_dispatch(ctx, 0x48u);
+}
+
+static int32_t call_mfree(uint8_t *memory, struct amtari_context *ctx, uint32_t address)
+{
+    ctx->cpu.a[7] = 0x0500u;
+    put16(memory, 0x0500u, 0x0049u);
+    put32(memory, 0x0502u, address);
+    return amtari_gemdos_dispatch(ctx, 0x49u);
+}
+
+static int32_t call_mshrink(uint8_t *memory, struct amtari_context *ctx,
+                            uint32_t address, uint32_t size)
+{
+    ctx->cpu.a[7] = 0x0500u;
+    put16(memory, 0x0500u, 0x004au);
+    put16(memory, 0x0502u, 0u);
+    put32(memory, 0x0504u, address);
+    put32(memory, 0x0508u, size);
+    return amtari_gemdos_dispatch(ctx, 0x4au);
+}
+
 int main(void)
 {
     struct amtari_context ctx = {0};
@@ -76,9 +103,12 @@ int main(void)
     struct fetch_fixture fixture = {0};
     uint8_t memory[32768] = {0};
     int32_t rc;
+    int32_t a;
+    int32_t b;
+    int32_t c;
 
     assert(amtari_init(&ctx) == 0);
-    assert(strcmp(amtari_version(), "0.2.18-m2") == 0);
+    assert(strcmp(amtari_version(), "0.2.19-m2") == 0);
     assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
     assert(amtari_program_bind(&ctx, fetch_program, &fixture) == 0);
 
@@ -93,11 +123,9 @@ int main(void)
     assert(fixture.child_count == 1); assert(fixture.grand_count == 1);
     assert(ctx.process_depth == 0u); assert(ctx.current_basepage == 0x0800u);
     assert(ctx.next_load_address == 0x1000u);
+    assert(ctx.heap_top == 0u);
     assert(memcmp(&ctx.cpu, &parent_cpu, sizeof(parent_cpu)) == 0);
 
-    /* CHILD image ends at 0x1136, aligns to 0x1140, then owns a 4 KiB stack.
-     * p_hitpa therefore describes the complete reserved process block. GRAND is
-     * loaded exactly at that high address and receives its own private block. */
     assert(get32(memory, 0x1004u) == 0x2140u);
     assert(get32(memory, 0x2144u) == 0x3250u);
 
@@ -105,10 +133,37 @@ int main(void)
     assert(rc == 42);
     assert(fixture.child_count == 2); assert(fixture.grand_count == 2);
     assert(ctx.process_depth == 0u); assert(ctx.next_load_address == 0x1000u);
+    assert(ctx.heap_top == 0u);
     assert(memcmp(&ctx.cpu, &parent_cpu, sizeof(parent_cpu)) == 0);
 
     ctx.process_depth = 8u; setup_parent_pexec(memory, &ctx);
     assert(amtari_gemdos_dispatch(&ctx, 0x4bu) == AMTARI_ENOSYS);
     assert(fixture.child_count == 2); assert(fixture.grand_count == 2);
+    ctx.process_depth = 0u;
+
+    /* M2.19 GEMDOS heap: allocations are 16-byte aligned and begin at the
+     * current process/load high-water mark. */
+    a = call_malloc(memory, &ctx, 32u);
+    b = call_malloc(memory, &ctx, 48u);
+    assert(a == 0x1000);
+    assert(b == 0x1020);
+    assert(ctx.heap_top == 0x1050u);
+
+    /* Free/reuse an exact block. This initial allocator intentionally reuses
+     * whole free blocks rather than splitting them on Malloc. */
+    assert(call_mfree(memory, &ctx, (uint32_t)a) == 0);
+    c = call_malloc(memory, &ctx, 16u);
+    assert(c == a);
+
+    /* Shrinking a tail allocation lowers the high-water mark. */
+    assert(call_mshrink(memory, &ctx, (uint32_t)b, 16u) == 0);
+    assert(ctx.heap_top == 0x1030u);
+    assert(call_malloc(memory, &ctx, 32u) == 0x1030);
+    assert(ctx.heap_top == 0x1050u);
+
+    /* Query-largest and invalid-free behavior are deterministic. */
+    assert(call_malloc(memory, &ctx, UINT32_MAX) > 0);
+    assert(call_mfree(memory, &ctx, 0x7770u) == AMTARI_EINVAL);
+
     return 0;
 }

@@ -1,10 +1,52 @@
 #include "amtari.h"
 
+static int bios_read_arg16(const struct amtari_context *ctx, uint32_t offset, uint16_t *value)
+{
+    return amtari_guest_read16(ctx, ctx->cpu.a[7] + 2u + offset, value);
+}
+
+static int32_t bios_bconin(struct amtari_context *ctx)
+{
+    uint16_t dev;
+    int value;
+
+    if (bios_read_arg16(ctx, 0u, &dev) != 0) return AMTARI_EFAULT;
+    if (dev != 2u) return AMTARI_ENOSYS;
+    if (ctx->console.getc == 0) return AMTARI_EIO;
+
+    value = ctx->console.getc(ctx->console.opaque);
+    return value < 0 ? AMTARI_EIO : (int32_t)(value & 0xff);
+}
+
+static int32_t bios_bconout(struct amtari_context *ctx)
+{
+    uint16_t dev;
+    uint16_t value;
+
+    if (bios_read_arg16(ctx, 0u, &dev) != 0 ||
+        bios_read_arg16(ctx, 2u, &value) != 0)
+        return AMTARI_EFAULT;
+    if (dev != 2u) return AMTARI_ENOSYS;
+    if (ctx->console.putc == 0) return AMTARI_EIO;
+
+    return ctx->console.putc(ctx->console.opaque,
+                             (unsigned char)(value & 0xffu)) < 0
+               ? AMTARI_EIO
+               : 0;
+}
+
 static int32_t dispatch_bios(struct amtari_context *ctx, uint16_t function)
 {
-    (void)ctx;
-    (void)function;
-    return AMTARI_ENOSYS;
+    switch (function) {
+    case 0x02u: /* Bconin */
+        return bios_bconin(ctx);
+    case 0x03u: /* Bconout */
+        return bios_bconout(ctx);
+    case 0x0au: /* Drvmap */
+        return (int32_t)ctx->drive_mask;
+    default:
+        return AMTARI_ENOSYS;
+    }
 }
 
 static int32_t dispatch_xbios(struct amtari_context *ctx, uint16_t function)

@@ -83,7 +83,7 @@ $(STRESS_OBJ): tests/fixtures/m2_12_stress.c | $(BUILD)
 	$(CROSS_CC) -m68000 -Os -ffreestanding -fno-pic -fno-pie -fno-stack-protector -fomit-frame-pointer -fno-toplevel-reorder -c $< -o $@
 
 $(STRESS_ELF): $(STRESS_OBJ)
-	$(CROSS_CC) -m68000 -nostdlib -Wl,-Ttext=0 -Wl,-e,amtari_entry -Wl,--build-id=none $< -o $@
+	$(CROSS_CC) -m68000 -nostdlib -Wl,--relax -Wl,-Ttext=0 -Wl,-e,amtari_entry -Wl,--build-id=none $< -o $@
 
 $(STRESS_TEXT): $(STRESS_ELF)
 	$(CROSS_OBJCOPY) -O binary -j .text $< $@

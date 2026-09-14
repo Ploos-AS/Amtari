@@ -85,6 +85,101 @@ static int32_t gemdos_cconws(struct amtari_context *ctx)
     return 0;
 }
 
+static int32_t gemdos_dsetdrv(struct amtari_context *ctx)
+{
+    uint16_t drive;
+
+    if (read_arg16(ctx, 0, &drive) != 0) {
+        return AMTARI_EFAULT;
+    }
+    if (drive >= 26u || (ctx->drive_mask & (1u << drive)) == 0u) {
+        return AMTARI_ENOENT;
+    }
+
+    ctx->current_drive = (uint8_t)drive;
+    return (int32_t)ctx->drive_mask;
+}
+
+static int32_t gemdos_dgetdrv(const struct amtari_context *ctx)
+{
+    return (int32_t)ctx->current_drive;
+}
+
+static int32_t gemdos_fopen(struct amtari_context *ctx)
+{
+    uint32_t filename;
+    uint16_t mode;
+    char path[AMTARI_PATH_MAX];
+    int rc;
+
+    if (ctx->fs.open == 0) {
+        return AMTARI_EIO;
+    }
+    if (read_arg32(ctx, 0, &filename) != 0 || read_arg16(ctx, 4, &mode) != 0) {
+        return AMTARI_EFAULT;
+    }
+    rc = amtari_path_translate(ctx, filename, path, sizeof(path));
+    if (rc != 0) {
+        return rc;
+    }
+
+    return ctx->fs.open(ctx->fs.opaque, path, mode);
+}
+
+static int32_t gemdos_fclose(struct amtari_context *ctx)
+{
+    uint16_t handle;
+
+    if (ctx->fs.close == 0) {
+        return AMTARI_EIO;
+    }
+    if (read_arg16(ctx, 0, &handle) != 0) {
+        return AMTARI_EFAULT;
+    }
+
+    return ctx->fs.close(ctx->fs.opaque, (int16_t)handle);
+}
+
+static int32_t gemdos_fread(struct amtari_context *ctx)
+{
+    uint16_t handle;
+    uint32_t count;
+    uint32_t buffer;
+
+    if (ctx->fs.read == 0) {
+        return AMTARI_EIO;
+    }
+    if (read_arg16(ctx, 0, &handle) != 0 || read_arg32(ctx, 2, &count) != 0 ||
+        read_arg32(ctx, 6, &buffer) != 0) {
+        return AMTARI_EFAULT;
+    }
+    if (!amtari_guest_range_valid(ctx, buffer, (size_t)count)) {
+        return AMTARI_EFAULT;
+    }
+
+    return ctx->fs.read(ctx->fs.opaque, (int16_t)handle, &ctx->memory.data[buffer], count);
+}
+
+static int32_t gemdos_fwrite(struct amtari_context *ctx)
+{
+    uint16_t handle;
+    uint32_t count;
+    uint32_t buffer;
+
+    if (ctx->fs.write == 0) {
+        return AMTARI_EIO;
+    }
+    if (read_arg16(ctx, 0, &handle) != 0 || read_arg32(ctx, 2, &count) != 0 ||
+        read_arg32(ctx, 6, &buffer) != 0) {
+        return AMTARI_EFAULT;
+    }
+    if (!amtari_guest_range_valid(ctx, buffer, (size_t)count)) {
+        return AMTARI_EFAULT;
+    }
+
+    return ctx->fs.write(ctx->fs.opaque, (int16_t)handle, &ctx->memory.data[buffer], count);
+}
+
 int32_t amtari_gemdos_dispatch(struct amtari_context *ctx, uint16_t function)
 {
     if (ctx == 0 || !ctx->initialized) {
@@ -98,6 +193,18 @@ int32_t amtari_gemdos_dispatch(struct amtari_context *ctx, uint16_t function)
         return gemdos_cconout(ctx);
     case 0x09:
         return gemdos_cconws(ctx);
+    case 0x0e:
+        return gemdos_dsetdrv(ctx);
+    case 0x19:
+        return gemdos_dgetdrv(ctx);
+    case 0x3d:
+        return gemdos_fopen(ctx);
+    case 0x3e:
+        return gemdos_fclose(ctx);
+    case 0x3f:
+        return gemdos_fread(ctx);
+    case 0x40:
+        return gemdos_fwrite(ctx);
     default:
         return AMTARI_ENOSYS;
     }

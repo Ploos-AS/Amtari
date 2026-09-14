@@ -71,6 +71,17 @@ static uint32_t get32(const uint8_t *memory, uint32_t address)
            ((uint32_t)memory[address + 2u] << 8) | (uint32_t)memory[address + 3u];
 }
 
+static int find_free_block_at(const struct amtari_context *ctx, uint32_t address)
+{
+    unsigned int i;
+    for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
+        if (ctx->mem_blocks[i].valid && !ctx->mem_blocks[i].in_use &&
+            ctx->mem_blocks[i].address == address && ctx->mem_blocks[i].size != 0u)
+            return 1;
+    }
+    return 0;
+}
+
 static void setup_pexec(uint8_t *memory, struct amtari_context *ctx, uint32_t name)
 {
     ctx->cpu.a[7] = 0x0400u;
@@ -121,7 +132,7 @@ int main(void)
     uint32_t heap_before_child;
 
     assert(amtari_init(&ctx) == 0);
-    assert(strcmp(amtari_version(), "0.2.21-m2") == 0);
+    assert(strcmp(amtari_version(), "0.2.22-m2") == 0);
     assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
     assert(amtari_program_bind(&ctx, fetch_program, &fixture) == 0);
 
@@ -178,8 +189,6 @@ int main(void)
     merged = call_malloc(memory, &ctx, 48u);
     assert(merged == 0x1000);
 
-    /* M2.21 process ownership: another basepage may observe the address but
-     * must not free or shrink a block owned by the parent process. */
     ctx.current_basepage = 0x0900u;
     assert(call_mfree(memory, &ctx, (uint32_t)merged) == AMTARI_EACCES);
     assert(call_mshrink(memory, &ctx, (uint32_t)merged, 16u) == AMTARI_EACCES);
@@ -194,6 +203,11 @@ int main(void)
     assert(ctx.heap_top == heap_before_child);
     assert(ctx.next_load_address == 0x1000u);
     assert(get32(memory, heap_before_child + 4u) > heap_before_child);
+
+    /* M2.22 records the complete child Pexec arena in mem_blocks while the
+     * child runs. On synchronous return it must be released as one reusable
+     * free region at the exact child basepage without disturbing parent heap. */
+    assert(find_free_block_at(&ctx, heap_before_child));
 
     assert(call_malloc(memory, &ctx, UINT32_MAX) > 0);
     assert(call_mfree(memory, &ctx, 0x7770u) == AMTARI_EINVAL);

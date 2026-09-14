@@ -2,9 +2,9 @@
  *
  * M2.21 enforces heap ownership. M2.22 makes synchronous Pexec(0) reserve its
  * basepage, loaded image and stack tail inside the same bounded memory table
- * used by the GEMDOS heap. The process arena is released with all child-owned
- * heap blocks when execution returns, preventing hidden overlap between nested
- * processes and Malloc-managed memory.
+ * used by the GEMDOS heap. The process arena is temporary: because Pexec(0)
+ * executes synchronously, the complete parent allocator topology is restored
+ * when the child returns.
  */
 #define AMTARI_M221_DISPATCH_NAME amtari_gemdos_dispatch_m221
 #include "gemdos_m221.c"
@@ -33,8 +33,9 @@ static int m222_reserve_arena(struct amtari_context *ctx, uint32_t basepage,
     int slot;
 
     /* Reuse a free block that already covers this address range. A released
-     * synchronous Pexec arena remains reusable in the table; adding a second
-     * descriptor over the same range would corrupt allocator topology. */
+     * synchronous Pexec arena must never be shadowed by an overlapping
+     * descriptor. In normal M2.22 operation the parent's descriptor table is
+     * restored after Pexec, but this also keeps reservation locally robust. */
     m220_coalesce_free(ctx);
     for (i = 0u; i < AMTARI_MEM_BLOCK_MAX; ++i) {
         struct amtari_mem_block *block = &ctx->mem_blocks[i];
@@ -101,6 +102,7 @@ static int32_t m222_pexec_load_and_go(struct amtari_context *ctx)
     size_t image_size = 0u;
     char path[AMTARI_PATH_MAX];
     struct amtari_cpu_state parent_cpu;
+    struct amtari_mem_block parent_mem_blocks[AMTARI_MEM_BLOCK_MAX];
     uint32_t parent_basepage;
     uint32_t parent_next_load;
     uint32_t parent_heap_top;
@@ -135,6 +137,7 @@ static int32_t m222_pexec_load_and_go(struct amtari_context *ctx)
     if (image == 0) return AMTARI_EIO;
 
     parent_cpu = ctx->cpu;
+    memcpy(parent_mem_blocks, ctx->mem_blocks, sizeof(parent_mem_blocks));
     parent_basepage = ctx->current_basepage;
     parent_next_load = ctx->next_load_address;
     parent_heap_top = ctx->heap_top;
@@ -155,7 +158,9 @@ static int32_t m222_pexec_load_and_go(struct amtari_context *ctx)
 
     rc = m222_reserve_arena(ctx, basepage, child_stack_top);
     if (rc != 0) {
+        memcpy(ctx->mem_blocks, parent_mem_blocks, sizeof(parent_mem_blocks));
         ctx->next_load_address = parent_next_load;
+        ctx->heap_top = parent_heap_top;
         return rc;
     }
 
@@ -167,7 +172,12 @@ static int32_t m222_pexec_load_and_go(struct amtari_context *ctx)
     else child_rc = rc;
 
     if (child_rc == AMTARI_EXEC_HALTED) child_rc = (int32_t)ctx->cpu.d[0];
-    m220_release_owner(ctx, basepage);
+
+    /* Pexec(0) is synchronous. Discard every child-owned arena/heap mutation
+     * and restore the exact allocator graph visible to the parent before the
+     * child started. This is stronger and safer than converting child blocks
+     * into free parent blocks, which changes later Malloc placement/topology. */
+    memcpy(ctx->mem_blocks, parent_mem_blocks, sizeof(parent_mem_blocks));
     ctx->cpu = parent_cpu;
     ctx->current_basepage = parent_basepage;
     ctx->next_load_address = parent_next_load;

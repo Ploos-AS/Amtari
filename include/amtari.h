@@ -4,8 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.2.2-m2"
+#define AMTARI_VERSION "0.2.3-m2"
 #define AMTARI_PATH_MAX 260
+#define AMTARI_BASEPAGE_SIZE 256u
 #define AMTARI_EINVAL (-1)
 #define AMTARI_EFAULT (-2)
 #define AMTARI_ENOSYS (-3)
@@ -18,6 +19,8 @@
 #define AMTARI_EISDIR (-10)
 #define AMTARI_ENOSPC (-11)
 #define AMTARI_ENOTEMPTY (-12)
+#define AMTARI_ENOEXEC (-13)
+#define AMTARI_ENOMEM (-14)
 
 enum amtari_mode {
     AMTARI_MODE_NATIVE = 0,
@@ -50,6 +53,8 @@ typedef int32_t (*amtari_fs_seek_fn)(void *opaque, int16_t handle, int32_t offse
 typedef int32_t (*amtari_fs_delete_fn)(void *opaque, const char *path);
 typedef int32_t (*amtari_fs_mkdir_fn)(void *opaque, const char *path);
 typedef int32_t (*amtari_fs_rmdir_fn)(void *opaque, const char *path);
+typedef int (*amtari_program_fetch_fn)(void *opaque, const char *path,
+                                       const uint8_t **data, size_t *size);
 
 struct amtari_cpu_state {
     uint32_t d[8];
@@ -82,6 +87,20 @@ struct amtari_fs_io {
     void *opaque;
 };
 
+struct amtari_process_io {
+    amtari_program_fetch_fn fetch;
+    void *opaque;
+};
+
+struct amtari_prg_info {
+    uint32_t text_size;
+    uint32_t data_size;
+    uint32_t bss_size;
+    uint32_t symbol_size;
+    uint32_t flags;
+    uint16_t absolute;
+};
+
 struct amtari_context {
     enum amtari_machine machine;
     enum amtari_mode mode;
@@ -89,9 +108,12 @@ struct amtari_context {
     struct amtari_guest_memory memory;
     struct amtari_console_io console;
     struct amtari_fs_io fs;
+    struct amtari_process_io process;
     uint32_t drive_mask;
     uint8_t current_drive;
     char cwd[26][AMTARI_PATH_MAX];
+    uint32_t next_load_address;
+    uint32_t current_basepage;
     int initialized;
 };
 
@@ -113,6 +135,11 @@ int amtari_fs_set_drives(struct amtari_context *ctx, uint32_t drive_mask, uint8_
 int amtari_path_translate(const struct amtari_context *ctx, uint32_t guest_address,
                           char *output, size_t output_size);
 int32_t amtari_gemdos_error_from_host(int32_t host_error);
+int amtari_program_bind(struct amtari_context *ctx, amtari_program_fetch_fn fetch_fn, void *opaque);
+int amtari_process_set_load_address(struct amtari_context *ctx, uint32_t address);
+int amtari_prg_parse(const uint8_t *image, size_t image_size, struct amtari_prg_info *info);
+int32_t amtari_prg_load(struct amtari_context *ctx, const uint8_t *image, size_t image_size,
+                        uint32_t basepage, const uint8_t *cmdline);
 
 enum amtari_trap_kind amtari_trap_decode(unsigned int trap_number);
 int32_t amtari_gemdos_dispatch(struct amtari_context *ctx, uint16_t function);

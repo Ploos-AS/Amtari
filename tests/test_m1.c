@@ -30,9 +30,9 @@ static void test_traps(void)
     assert(amtari_trap_decode(14) == AMTARI_TRAP_XBIOS);
     assert(amtari_trap_decode(2) == AMTARI_TRAP_UNKNOWN);
 
-    assert(amtari_trap_dispatch(&ctx, 1, 0) == AMTARI_EINVAL);
+    assert(amtari_trap_dispatch(&ctx, 1, 0xffffu) == AMTARI_EINVAL);
     assert(amtari_init(&ctx) == 0);
-    assert(amtari_trap_dispatch(&ctx, 1, 0) == AMTARI_ENOSYS);
+    assert(amtari_trap_dispatch(&ctx, 1, 0xffffu) == AMTARI_ENOSYS);
     assert(amtari_trap_dispatch(&ctx, 13, 0) == AMTARI_ENOSYS);
     assert(amtari_trap_dispatch(&ctx, 14, 0) == AMTARI_ENOSYS);
     assert(amtari_trap_dispatch(&ctx, 2, 0) == AMTARI_ENOSYS);

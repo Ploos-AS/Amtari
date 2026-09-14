@@ -8,6 +8,10 @@
 #include "gemdos_m214.c"
 #undef AMTARI_M214_DISPATCH_NAME
 
+#ifndef AMTARI_M220_DISPATCH_NAME
+#define AMTARI_M220_DISPATCH_NAME amtari_gemdos_dispatch
+#endif
+
 #define M220_STACK_RESERVE 4096u
 #define M220_MAX_STEPS 65536u
 #define M220_MAX_PROCESS_DEPTH 8u
@@ -326,7 +330,7 @@ static int32_t m220_pexec_load_and_go(struct amtari_context *ctx)
     return child_rc;
 }
 
-int32_t amtari_gemdos_dispatch(struct amtari_context *ctx, uint16_t function)
+int32_t AMTARI_M220_DISPATCH_NAME(struct amtari_context *ctx, uint16_t function)
 {
     uint16_t mode;
 

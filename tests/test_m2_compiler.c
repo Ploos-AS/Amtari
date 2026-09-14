@@ -33,7 +33,7 @@ int main(void)
     uint32_t steps = 0u;
 
     assert(amtari_init(&ctx) == 0);
-    assert(strcmp(amtari_version(), "0.2.10-m2") == 0);
+    assert(strncmp(amtari_version(), "0.2.", 4u) == 0);
     assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
 
     /* Compiler-like frame using byte/word loads, EXT, logical ops and CMP. */

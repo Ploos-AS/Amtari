@@ -16,6 +16,10 @@
 #undef AMTARI_GEMDOS_DISPATCH_NAME
 #undef AMTARI_M220_DISPATCH_NAME
 
+#ifndef AMTARI_M221_DISPATCH_NAME
+#define AMTARI_M221_DISPATCH_NAME amtari_gemdos_dispatch
+#endif
+
 static int m221_lookup_block(const struct amtari_context *ctx, uint32_t address)
 {
     unsigned int i;
@@ -32,6 +36,10 @@ static int32_t m221_check_owner(struct amtari_context *ctx, uint32_t arg_offset)
     int slot;
 
     if (read_arg32(ctx, arg_offset, &address) != 0) return AMTARI_EFAULT;
+    /* The current basepage identifies the process arena itself, not a GEMDOS
+     * heap allocation. Later milestones may track that arena in mem_blocks;
+     * never let Mfree/Mshrink tear down a running process image. */
+    if (address == ctx->current_basepage) return AMTARI_EACCES;
     slot = m221_lookup_block(ctx, address);
     if (slot < 0) return AMTARI_EINVAL;
     if (ctx->mem_blocks[slot].owner_basepage != ctx->current_basepage)
@@ -39,7 +47,7 @@ static int32_t m221_check_owner(struct amtari_context *ctx, uint32_t arg_offset)
     return 0;
 }
 
-int32_t amtari_gemdos_dispatch(struct amtari_context *ctx, uint16_t function)
+int32_t AMTARI_M221_DISPATCH_NAME(struct amtari_context *ctx, uint16_t function)
 {
     int32_t rc;
 

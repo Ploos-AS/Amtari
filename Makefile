@@ -3,15 +3,16 @@ CFLAGS ?= -std=c99 -Wall -Wextra -Werror -pedantic -O2
 CPPFLAGS ?= -Iinclude
 
 BUILD := build
-COMMON_SRC := src/amtari.c src/guest.c src/trap.c src/gemdos.c src/fs.c
+COMMON_SRC := src/amtari.c src/guest.c src/trap.c src/gemdos.c src/fs.c src/prg.c
 TEST_M0 := $(BUILD)/test_m0
 TEST_M1 := $(BUILD)/test_m1
 TEST_M2 := $(BUILD)/test_m2
 TEST_M2_FS := $(BUILD)/test_m2_fs
+TEST_M2_PRG := $(BUILD)/test_m2_prg
 
 .PHONY: all check clean
 
-all: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS)
+all: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG)
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -28,12 +29,16 @@ $(TEST_M2): $(COMMON_SRC) tests/test_m2.c include/amtari.h | $(BUILD)
 $(TEST_M2_FS): $(COMMON_SRC) tests/test_m2_fs.c include/amtari.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m2_fs.c -o $(TEST_M2_FS)
 
-check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS)
+$(TEST_M2_PRG): $(COMMON_SRC) tests/test_m2_prg.c include/amtari.h | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m2_prg.c -o $(TEST_M2_PRG)
+
+check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG)
 	./$(TEST_M0)
 	./$(TEST_M1)
 	./$(TEST_M2)
 	./$(TEST_M2_FS)
-	@echo "M2 filesystem host checks: PASS"
+	./$(TEST_M2_PRG)
+	@echo "M2.3 PRG/process host checks: PASS"
 
 clean:
 	rm -rf $(BUILD)

@@ -13,7 +13,7 @@ Amtari is developed incrementally. A milestone is not considered runtime-qualifi
 
 **Qualified:** GitHub Actions host checks pass.
 
-## M1 — 68k execution model and trap core
+## M1 — 68k execution model and trap core ✅
 
 - [x] Define Atari guest CPU state.
 - [x] Define bounded Atari guest address-space access helpers.
@@ -22,16 +22,24 @@ Amtari is developed incrementally. A milestone is not considered runtime-qualifi
 - [x] BIOS TRAP #13 dispatcher skeleton.
 - [x] XBIOS TRAP #14 dispatcher skeleton.
 - [x] Host-independent unit tests for trap decoding, guest state and big-endian guest memory reads.
-- [ ] CI qualification of the complete M1 host test suite.
+- [x] CI qualification of the complete M1 host test suite.
 
-**Exit criterion:** all M0/M1 host tests pass in CI and the trap/address-space interfaces form a stable base for implementing the first GEMDOS calls.
+**Qualified:** the complete M1 host test suite is exercised by the current CI host-checks job and passes as part of every M2 qualification run.
 
-## M2 — Minimal TOS/GEM application environment
+## M2 — Minimal TOS/GEM application environment ✅
 
-- GEMDOS subset for console/file/process primitives.
-- Initial path/filesystem translation.
-- Minimal BIOS/XBIOS services required by test programs.
-- Establish legal ROM/TOS handling policy: Amtari does not redistribute proprietary ROM images.
+- [x] GEMDOS console primitives and trap dispatch.
+- [x] GEMDOS file and directory subset with Atari-to-host path translation.
+- [x] TOS PRG parsing, loading, relocation and basepage setup.
+- [x] Bounded 68000 execution core sufficient for the qualified compiler-generated test corpus.
+- [x] Synchronous Pexec process lifecycle, nesting and parent-state restoration.
+- [x] GEMDOS Malloc/Mfree/Mshrink allocator with ownership and process-arena isolation.
+- [x] Minimal BIOS console/status and drive services required by the M2 corpus.
+- [x] Minimal XBIOS services required by the M2 corpus: Random, Gettime and Settime.
+- [x] Cross-compiled real m68k C qualification in GitHub Actions.
+- [x] Legal ROM/TOS policy: Amtari does not redistribute proprietary Atari TOS ROM images; M2 qualification uses synthetic and redistributable test inputs only.
+
+**Qualified through M2.27:** GitHub Actions host checks and the real m68k cross-compiled C job pass. M2 establishes the TOS/GEM application substrate; broader desktop services belong to M3 rather than expanding M2 indefinitely.
 
 ## M3 — GEM desktop application compatibility
 

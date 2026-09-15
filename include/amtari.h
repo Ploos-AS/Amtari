@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.2.27-m2"
+#define AMTARI_VERSION "0.3.0-m3"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_BASEPAGE_SIZE 256u
 #define AMTARI_MEM_BLOCK_MAX 32u
@@ -45,6 +45,11 @@ typedef int32_t (*amtari_fs_delete_fn)(void *opaque, const char *path);
 typedef int32_t (*amtari_fs_mkdir_fn)(void *opaque, const char *path);
 typedef int32_t (*amtari_fs_rmdir_fn)(void *opaque, const char *path);
 typedef int (*amtari_program_fetch_fn)(void *opaque, const char *path, const uint8_t **data, size_t *size);
+typedef int32_t (*amtari_vdi_dispatch_fn)(void *opaque, uint16_t opcode,
+                                         const int16_t *intin, uint16_t intin_count,
+                                         const int16_t *ptsin, uint16_t ptsin_count,
+                                         int16_t *intout, uint16_t intout_capacity,
+                                         int16_t *ptsout, uint16_t ptsout_capacity);
 
 struct amtari_cpu_state { uint32_t d[8]; uint32_t a[8]; uint32_t pc; uint16_t sr; };
 struct amtari_guest_memory { uint8_t *data; size_t size; };
@@ -56,6 +61,7 @@ struct amtari_console_io {
     void *opaque;
 };
 struct amtari_clock_io { amtari_clock_get_fn get; amtari_clock_set_fn set; void *opaque; };
+struct amtari_vdi_io { amtari_vdi_dispatch_fn dispatch; void *opaque; };
 struct amtari_fs_io {
     amtari_fs_open_fn open; amtari_fs_create_fn create; amtari_fs_close_fn close;
     amtari_fs_read_fn read; amtari_fs_write_fn write; amtari_fs_seek_fn seek;
@@ -74,7 +80,8 @@ struct amtari_mem_block {
 struct amtari_context {
     enum amtari_machine machine; enum amtari_mode mode; struct amtari_cpu_state cpu;
     struct amtari_guest_memory memory; struct amtari_console_io console; struct amtari_clock_io clock;
-    struct amtari_fs_io fs; struct amtari_process_io process; uint32_t drive_mask; uint8_t current_drive;
+    struct amtari_vdi_io vdi; struct amtari_fs_io fs; struct amtari_process_io process;
+    uint32_t drive_mask; uint8_t current_drive;
     char cwd[26][AMTARI_PATH_MAX]; uint32_t next_load_address; uint32_t current_basepage;
     struct amtari_mem_block mem_blocks[AMTARI_MEM_BLOCK_MAX]; uint32_t heap_top;
     uint32_t random_seed;
@@ -87,6 +94,12 @@ int amtari_random_seed(struct amtari_context *ctx, uint32_t seed);
 int amtari_clock_bind(struct amtari_context *ctx, amtari_clock_get_fn get_fn, void *opaque);
 int amtari_clock_bind_rw(struct amtari_context *ctx, amtari_clock_get_fn get_fn,
                          amtari_clock_set_fn set_fn, void *opaque);
+int amtari_vdi_bind(struct amtari_context *ctx, amtari_vdi_dispatch_fn dispatch_fn, void *opaque);
+int32_t amtari_vdi_dispatch(struct amtari_context *ctx, uint16_t opcode,
+                            const int16_t *intin, uint16_t intin_count,
+                            const int16_t *ptsin, uint16_t ptsin_count,
+                            int16_t *intout, uint16_t intout_capacity,
+                            int16_t *ptsout, uint16_t ptsout_capacity);
 int amtari_guest_memory_bind(struct amtari_context *ctx, uint8_t *data, size_t size);
 int amtari_guest_range_valid(const struct amtari_context *ctx, uint32_t address, size_t length);
 int amtari_guest_read16(const struct amtari_context *ctx, uint32_t address, uint16_t *value);

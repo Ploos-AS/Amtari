@@ -97,7 +97,7 @@ int main(void)
     program.last_path[0] = '\0';
 
     assert(amtari_init(&ctx) == 0);
-    assert(strncmp(amtari_version(), "0.2.", 4) == 0);
+    assert(strcmp(amtari_version(), AMTARI_VERSION) == 0);
     assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
     assert(amtari_console_bind(&ctx, 0, console_putc, &console) == 0);
     assert(amtari_program_bind(&ctx, fetch_program, &program) == 0);

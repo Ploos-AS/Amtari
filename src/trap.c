@@ -5,6 +5,11 @@ static int bios_read_arg16(const struct amtari_context *ctx, uint32_t offset, ui
     return amtari_guest_read16(ctx, ctx->cpu.a[7] + 2u + offset, value);
 }
 
+static int xbios_read_arg32(const struct amtari_context *ctx, uint32_t offset, uint32_t *value)
+{
+    return amtari_guest_read32(ctx, ctx->cpu.a[7] + 2u + offset, value);
+}
+
 static int32_t bios_bconstat(struct amtari_context *ctx)
 {
     uint16_t dev;
@@ -87,6 +92,15 @@ static int32_t xbios_random(struct amtari_context *ctx)
     return (int32_t)((ctx->random_seed >> 8) & UINT32_C(0x00ffffff));
 }
 
+static int32_t xbios_settime(struct amtari_context *ctx)
+{
+    uint32_t tos_datetime;
+
+    if (xbios_read_arg32(ctx, 0u, &tos_datetime) != 0) return AMTARI_EFAULT;
+    if (ctx->clock.set == 0) return AMTARI_EIO;
+    return ctx->clock.set(ctx->clock.opaque, tos_datetime) == 0 ? 0 : AMTARI_EIO;
+}
+
 static int32_t xbios_gettime(struct amtari_context *ctx)
 {
     uint32_t tos_datetime;
@@ -101,6 +115,8 @@ static int32_t dispatch_xbios(struct amtari_context *ctx, uint16_t function)
     switch (function) {
     case 0x11u: /* Random */
         return xbios_random(ctx);
+    case 0x16u: /* Settime */
+        return xbios_settime(ctx);
     case 0x17u: /* Gettime */
         return xbios_gettime(ctx);
     default:

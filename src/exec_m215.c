@@ -106,6 +106,12 @@ int amtari_exec_step(struct amtari_context *ctx)
     if (ctx == 0 || !ctx->initialized) return AMTARI_EINVAL;
     pc = ctx->cpu.pc;
     if (amtari_guest_read16(ctx, pc, &opcode) != 0) return AMTARI_EFAULT;
+    if (opcode == 0x4e42u) {
+        rc = (int)amtari_trap_dispatch(ctx, 2u, (uint16_t)ctx->cpu.d[0]);
+        if (rc != 0) return rc;
+        ctx->cpu.pc = pc + 2u;
+        return AMTARI_EXEC_RUNNING;
+    }
     rc = m215_pc_relative_instruction(ctx, opcode, pc);
     if (rc != AMTARI_EILLEGAL) return rc;
     return amtari_exec_step_m213(ctx);

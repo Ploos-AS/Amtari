@@ -153,7 +153,7 @@ check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_E
 	./$(TEST_M2_COMPILER)
 	./$(TEST_M2_PROCESS)
 	./$(TEST_M3_VDI)
-	@echo "M3.0 host regression + VDI abstraction: PASS"
+	@echo "M3.2 host regression + VDI result counts: PASS"
 
 cross-check: $(CROSS_PRG) $(STRESS_PRG) $(M213_PRG) $(M213_INDEX_PRG) $(M214_PRG) $(M215_PRG) $(TEST_M2_CROSS)
 	@echo "--- M2.11 GCC-generated m68k code ---"
@@ -174,7 +174,7 @@ cross-check: $(CROSS_PRG) $(STRESS_PRG) $(M213_PRG) $(M213_INDEX_PRG) $(M214_PRG
 	@echo "--- M2.15 linked absolute-long relocation code ---"
 	$(CROSS_OBJDUMP) -dr $(M215_ELF)
 	./$(TEST_M2_CROSS) $(M215_PRG) 42
-	@echo "M3.0 preserves M2 cross-compiled m68k regressions: PASS"
+	@echo "M3.2 preserves M2 cross-compiled m68k regressions: PASS"
 
 clean:
 	rm -rf $(BUILD)

@@ -47,7 +47,7 @@ int main(void)
     uint32_t tbase = 0x200u;
 
     assert(amtari_init(&ctx) == 0);
-    assert(strncmp(amtari_version(), "0.2.", 4) == 0);
+    assert(strcmp(amtari_version(), AMTARI_VERSION) == 0);
     assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
     assert(amtari_console_bind(&ctx, console_getc, console_putc, &console) == 0);
     put32(memory, basepage + 0x08u, tbase);

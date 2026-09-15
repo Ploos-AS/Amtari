@@ -6,7 +6,7 @@ CROSS_OBJCOPY ?= m68k-linux-gnu-objcopy
 CROSS_OBJDUMP ?= m68k-linux-gnu-objdump
 
 BUILD := build
-COMMON_SRC := src/amtari.c src/guest.c src/trap.c src/gemdos_m222.c src/fs.c src/prg.c src/exec_m215.c
+COMMON_SRC := src/amtari.c src/guest.c src/trap.c src/gemdos_m222.c src/fs.c src/prg.c src/exec_m215.c src/vdi.c
 TEST_M0 := $(BUILD)/test_m0
 TEST_M1 := $(BUILD)/test_m1
 TEST_M2 := $(BUILD)/test_m2
@@ -20,6 +20,7 @@ TEST_M2_ADDR := $(BUILD)/test_m2_addressing
 TEST_M2_COMPILER := $(BUILD)/test_m2_compiler
 TEST_M2_PROCESS := $(BUILD)/test_m2_process
 TEST_M2_CROSS := $(BUILD)/test_m2_cross
+TEST_M3_VDI := $(BUILD)/test_m3_vdi
 CROSS_OBJ := $(BUILD)/m2_11_real.o
 CROSS_TEXT := $(BUILD)/m2_11_real.text
 CROSS_PRG := $(BUILD)/m2_11_real.prg
@@ -48,7 +49,7 @@ M215_PRG := $(BUILD)/m2_15_reloc.prg
 
 .PHONY: all check cross-check clean
 
-all: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E) $(TEST_M2_COND) $(TEST_M2_ARITH) $(TEST_M2_ADDR) $(TEST_M2_COMPILER) $(TEST_M2_PROCESS)
+all: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E) $(TEST_M2_COND) $(TEST_M2_ARITH) $(TEST_M2_ADDR) $(TEST_M2_COMPILER) $(TEST_M2_PROCESS) $(TEST_M3_VDI)
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -79,6 +80,8 @@ $(TEST_M2_PROCESS): $(COMMON_SRC) tests/test_m2_process.c include/amtari.h | $(B
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m2_process.c -o $(TEST_M2_PROCESS)
 $(TEST_M2_CROSS): $(COMMON_SRC) tests/test_m2_cross.c include/amtari.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m2_cross.c -o $(TEST_M2_CROSS)
+$(TEST_M3_VDI): $(COMMON_SRC) tests/test_m3_vdi.c include/amtari.h | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(COMMON_SRC) tests/test_m3_vdi.c -o $(TEST_M3_VDI)
 
 $(CROSS_OBJ): tests/fixtures/m2_11_real.c | $(BUILD)
 	$(CROSS_CC) -m68000 -Os -ffreestanding -fno-pic -fno-pie -fno-stack-protector -fomit-frame-pointer -c $< -o $@
@@ -136,7 +139,7 @@ $(M215_DATA): $(M215_ELF)
 $(M215_PRG): $(M215_TEXT) $(M215_DATA) tools/make_tos_prg_sections.py
 	python3 tools/make_tos_prg_sections.py $(M215_TEXT) $(M215_DATA) $@ --reloc 2
 
-check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E) $(TEST_M2_COND) $(TEST_M2_ARITH) $(TEST_M2_ADDR) $(TEST_M2_COMPILER) $(TEST_M2_PROCESS)
+check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_EXEC) $(TEST_M2_E2E) $(TEST_M2_COND) $(TEST_M2_ARITH) $(TEST_M2_ADDR) $(TEST_M2_COMPILER) $(TEST_M2_PROCESS) $(TEST_M3_VDI)
 	./$(TEST_M0)
 	./$(TEST_M1)
 	./$(TEST_M2)
@@ -149,7 +152,8 @@ check: $(TEST_M0) $(TEST_M1) $(TEST_M2) $(TEST_M2_FS) $(TEST_M2_PRG) $(TEST_M2_E
 	./$(TEST_M2_ADDR)
 	./$(TEST_M2_COMPILER)
 	./$(TEST_M2_PROCESS)
-	@echo "M2.27 host regression suite: PASS"
+	./$(TEST_M3_VDI)
+	@echo "M3.0 host regression + VDI abstraction: PASS"
 
 cross-check: $(CROSS_PRG) $(STRESS_PRG) $(M213_PRG) $(M213_INDEX_PRG) $(M214_PRG) $(M215_PRG) $(TEST_M2_CROSS)
 	@echo "--- M2.11 GCC-generated m68k code ---"
@@ -170,7 +174,7 @@ cross-check: $(CROSS_PRG) $(STRESS_PRG) $(M213_PRG) $(M213_INDEX_PRG) $(M214_PRG
 	@echo "--- M2.15 linked absolute-long relocation code ---"
 	$(CROSS_OBJDUMP) -dr $(M215_ELF)
 	./$(TEST_M2_CROSS) $(M215_PRG) 42
-	@echo "M2.27 cross-compiled m68k regression suite: PASS"
+	@echo "M3.0 preserves M2 cross-compiled m68k regressions: PASS"
 
 clean:
 	rm -rf $(BUILD)

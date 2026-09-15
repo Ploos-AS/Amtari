@@ -6,8 +6,11 @@ int amtari_vdi_line_bind(struct amtari_context *ctx, amtari_vdi_line_fn line_fn,
 { if(ctx==0||!ctx->initialized)return AMTARI_EINVAL; ctx->vdi.line=line_fn; ctx->vdi.line_opaque=opaque; return 0; }
 int amtari_vdi_configure(struct amtari_context *ctx,uint16_t width,uint16_t height,uint16_t colors)
 { if(ctx==0||!ctx->initialized||width==0u||height==0u||colors==0u)return AMTARI_EINVAL; ctx->vdi.width=width;ctx->vdi.height=height;ctx->vdi.colors=colors;if(ctx->vdi.next_handle==0u)ctx->vdi.next_handle=1u;if(ctx->vdi.line_style==0u)ctx->vdi.line_style=1u;return 0; }
+/* Classic VDI v_opnwk returns work_out[0..44] through intout and
+ * work_out[45..56] through ptsout.  Keep unsupported capability fields zero,
+ * but expose the basic screen geometry/capabilities at their historical slots. */
 static int32_t vdi_open_workstation(struct amtari_context *ctx,int16_t *intout,uint16_t ic,uint16_t *ni,int16_t *ptsout,uint16_t pc,uint16_t *np)
-{ if(ctx->vdi.width==0u||ctx->vdi.height==0u||ctx->vdi.colors==0u)return AMTARI_ENOSYS;if(ic<3u||pc<2u||!intout||!ptsout)return AMTARI_EINVAL;intout[0]=(int16_t)ctx->vdi.next_handle++;intout[1]=(int16_t)ctx->vdi.colors;intout[2]=1;ptsout[0]=(int16_t)(ctx->vdi.width-1u);ptsout[1]=(int16_t)(ctx->vdi.height-1u);*ni=3u;*np=2u;return 0; }
+{ uint16_t i;if(ctx->vdi.width==0u||ctx->vdi.height==0u||ctx->vdi.colors==0u)return AMTARI_ENOSYS;if(ic<45u||pc<12u||!intout||!ptsout)return AMTARI_EINVAL;for(i=0u;i<45u;++i)intout[i]=0;for(i=0u;i<12u;++i)ptsout[i]=0;intout[0]=(int16_t)(ctx->vdi.width-1u);intout[1]=(int16_t)(ctx->vdi.height-1u);intout[3]=1;intout[4]=1;intout[5]=1;intout[6]=1;intout[7]=1;intout[8]=1;intout[9]=1;intout[10]=1;intout[13]=(int16_t)ctx->vdi.colors;intout[35]=1;*ni=45u;*np=12u;ctx->vdi.next_handle++;return 0; }
 static int32_t vdi_line_attribute(struct amtari_context *ctx,uint16_t opcode,const int16_t *intin,uint16_t n,int16_t *intout,uint16_t cap,uint16_t *count)
 { uint16_t v;if(!intin||n<1u||!intout||cap<1u)return AMTARI_EINVAL;v=(uint16_t)intin[0];if(opcode==15u){if(v<1u||v>6u)v=1u;ctx->vdi.line_style=v;}else{if(v>=ctx->vdi.colors)v=1u;ctx->vdi.line_color=v;}intout[0]=(int16_t)v;*count=1u;return 0; }
 static int32_t vdi_polyline(struct amtari_context *ctx,const int16_t *ptsin,uint16_t n)

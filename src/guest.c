@@ -58,3 +58,14 @@ int amtari_guest_read32(const struct amtari_context *ctx, uint32_t address, uint
              (uint32_t)p[3];
     return 0;
 }
+
+int amtari_guest_write16(struct amtari_context *ctx, uint32_t address, uint16_t value)
+{
+    uint8_t *p;
+
+    if (!amtari_guest_range_valid(ctx, address, 2)) return AMTARI_EFAULT;
+    p = &ctx->memory.data[address];
+    p[0] = (uint8_t)(value >> 8);
+    p[1] = (uint8_t)value;
+    return 0;
+}

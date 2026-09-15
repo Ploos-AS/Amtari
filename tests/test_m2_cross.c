@@ -46,7 +46,7 @@ int main(int argc, char **argv)
     assert(argc == 3);
     expected = (uint32_t)strtoul(argv[2], 0, 0);
     assert(amtari_init(&ctx) == 0);
-    assert(strncmp(amtari_version(), "0.2.", 4u) == 0);
+    assert(strcmp(amtari_version(), AMTARI_VERSION) == 0);
     assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
 
     image = read_file(argv[1], &image_size);

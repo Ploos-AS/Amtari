@@ -13,7 +13,10 @@ struct console_fixture {
 
 struct clock_fixture {
     uint32_t value;
+    uint32_t set_value;
     int fail;
+    int set_fail;
+    int set_count;
 };
 
 static int console_getc(void *opaque)
@@ -50,10 +53,27 @@ static int clock_get(void *opaque, uint32_t *tos_datetime)
     return 0;
 }
 
+static int clock_set(void *opaque, uint32_t tos_datetime)
+{
+    struct clock_fixture *fixture = (struct clock_fixture *)opaque;
+    if (fixture->set_fail) return -1;
+    fixture->set_value = tos_datetime;
+    ++fixture->set_count;
+    return 0;
+}
+
 static void put16(uint8_t *memory, uint32_t address, uint16_t value)
 {
     memory[address] = (uint8_t)(value >> 8);
     memory[address + 1u] = (uint8_t)value;
+}
+
+static void put32(uint8_t *memory, uint32_t address, uint32_t value)
+{
+    memory[address] = (uint8_t)(value >> 24);
+    memory[address + 1u] = (uint8_t)(value >> 16);
+    memory[address + 2u] = (uint8_t)(value >> 8);
+    memory[address + 3u] = (uint8_t)value;
 }
 
 static void test_guest_memory(void)
@@ -164,18 +184,37 @@ static void test_xbios_random(void)
     assert(amtari_trap_dispatch(&ctx, 14u, 0x11u) == first);
 }
 
-static void test_xbios_gettime(void)
+static void test_xbios_time(void)
 {
     struct amtari_context ctx = {0};
-    struct clock_fixture fixture = {UINT32_C(0x5c4f7b1d), 0};
+    struct clock_fixture fixture = {UINT32_C(0x5c4f7b1d), 0u, 0, 0, 0};
+    uint8_t memory[64] = {0};
 
     assert(amtari_init(&ctx) == 0);
+    assert(amtari_guest_memory_bind(&ctx, memory, sizeof(memory)) == 0);
     assert(amtari_trap_dispatch(&ctx, 14u, 0x17u) == AMTARI_EIO);
     assert(amtari_clock_bind(&ctx, clock_get, &fixture) == 0);
     assert((uint32_t)amtari_trap_dispatch(&ctx, 14u, 0x17u) == fixture.value);
 
     fixture.value = UINT32_C(0xfc4f7b1d);
     assert((uint32_t)amtari_trap_dispatch(&ctx, 14u, 0x17u) == fixture.value);
+
+    ctx.cpu.a[7] = 0x10u;
+    put16(memory, 0x10u, 0x0016u);
+    put32(memory, 0x12u, UINT32_C(0x9abcdef0));
+    assert(amtari_trap_dispatch(&ctx, 14u, 0x16u) == AMTARI_EIO);
+
+    assert(amtari_clock_bind_rw(&ctx, clock_get, clock_set, &fixture) == 0);
+    assert(amtari_trap_dispatch(&ctx, 14u, 0x16u) == 0);
+    assert(fixture.set_count == 1);
+    assert(fixture.set_value == UINT32_C(0x9abcdef0));
+
+    fixture.set_fail = 1;
+    assert(amtari_trap_dispatch(&ctx, 14u, 0x16u) == AMTARI_EIO);
+    fixture.set_fail = 0;
+
+    ctx.cpu.a[7] = 62u;
+    assert(amtari_trap_dispatch(&ctx, 14u, 0x16u) == AMTARI_EFAULT);
 
     fixture.fail = 1;
     assert(amtari_trap_dispatch(&ctx, 14u, 0x17u) == AMTARI_EIO);
@@ -187,6 +226,6 @@ int main(void)
     test_traps();
     test_bios_console_and_drvmap();
     test_xbios_random();
-    test_xbios_gettime();
+    test_xbios_time();
     return 0;
 }

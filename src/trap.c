@@ -18,6 +18,7 @@ static int32_t dispatch_vdi_trap(struct amtari_context *ctx)
     uint32_t contrl, intin_addr, ptsin_addr, intout_addr, ptsout_addr;
     uint16_t opcode, ptsin_pairs, intin_count;
     uint16_t ptsin_count, intout_count = 0u, ptsout_count = 0u;
+    uint16_t workstation_handle = 0u;
     int16_t intin[AMTARI_VDI_WORD_MAX];
     int16_t ptsin[AMTARI_VDI_WORD_MAX];
     int16_t intout[AMTARI_VDI_WORD_MAX];
@@ -53,6 +54,12 @@ static int32_t dispatch_vdi_trap(struct amtari_context *ctx)
         ptsin[i] = (int16_t)value;
     }
 
+    /* v_opnwk returns the handle in contrl[6], not in work_out.  Capture the
+     * handle that the builtin dispatcher is about to allocate before it
+     * advances next_handle. */
+    if (opcode == 1u)
+        workstation_handle = ctx->vdi.next_handle;
+
     rc = amtari_vdi_dispatch(ctx, opcode,
                              intin_count ? intin : 0, intin_count,
                              ptsin_count ? ptsin : 0, ptsin_count,
@@ -75,12 +82,9 @@ static int32_t dispatch_vdi_trap(struct amtari_context *ctx)
         amtari_guest_write16(ctx, contrl + 8u, intout_count) != 0)
         return AMTARI_EFAULT;
 
-    /* Atari VDI returns the workstation handle in contrl[6].  The builtin
-     * v_opnwk dispatcher keeps its compact host API result in intout[0];
-     * translate that result to the historical guest ABI here. */
     if (opcode == 1u) {
-        if (intout_count == 0u) return AMTARI_EIO;
-        if (amtari_guest_write16(ctx, contrl + 12u, (uint16_t)intout[0]) != 0)
+        if (workstation_handle == 0u) return AMTARI_EIO;
+        if (amtari_guest_write16(ctx, contrl + 12u, workstation_handle) != 0)
             return AMTARI_EFAULT;
     }
     return 0;

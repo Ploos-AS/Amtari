@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.3.0-m3"
+#define AMTARI_VERSION "0.3.1-m3"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_BASEPAGE_SIZE 256u
 #define AMTARI_MEM_BLOCK_MAX 32u
@@ -28,7 +28,7 @@
 
 enum amtari_mode { AMTARI_MODE_NATIVE = 0, AMTARI_MODE_HYBRID, AMTARI_MODE_FULL };
 enum amtari_machine { AMTARI_MACHINE_ST = 0, AMTARI_MACHINE_STE, AMTARI_MACHINE_TT, AMTARI_MACHINE_FALCON };
-enum amtari_trap_kind { AMTARI_TRAP_UNKNOWN = 0, AMTARI_TRAP_GEMDOS, AMTARI_TRAP_BIOS, AMTARI_TRAP_XBIOS };
+enum amtari_trap_kind { AMTARI_TRAP_UNKNOWN = 0, AMTARI_TRAP_GEMDOS, AMTARI_TRAP_GEM, AMTARI_TRAP_BIOS, AMTARI_TRAP_XBIOS };
 
 typedef int (*amtari_console_getc_fn)(void *opaque);
 typedef int (*amtari_console_putc_fn)(void *opaque, unsigned char ch);
@@ -104,6 +104,7 @@ int amtari_guest_memory_bind(struct amtari_context *ctx, uint8_t *data, size_t s
 int amtari_guest_range_valid(const struct amtari_context *ctx, uint32_t address, size_t length);
 int amtari_guest_read16(const struct amtari_context *ctx, uint32_t address, uint16_t *value);
 int amtari_guest_read32(const struct amtari_context *ctx, uint32_t address, uint32_t *value);
+int amtari_guest_write16(struct amtari_context *ctx, uint32_t address, uint16_t value);
 int amtari_console_bind(struct amtari_context *ctx, amtari_console_getc_fn getc_fn, amtari_console_putc_fn putc_fn, void *opaque);
 int amtari_console_status_bind(struct amtari_context *ctx, amtari_console_status_fn input_ready_fn,
                                amtari_console_status_fn output_ready_fn);

@@ -24,9 +24,13 @@ Initial development targets the Atari ST family. The roadmap then expands throug
 
 See [ROADMAP.md](ROADMAP.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## M0 status
+## Current status
 
-M0 establishes the project baseline: scope, architecture, repository layout and a buildable host-side skeleton. It intentionally does **not** claim Atari software compatibility yet.
+M0 and M1 are qualified. M2 establishes a qualified minimal TOS/GEM application substrate: GEMDOS console/filesystem/process services, TOS PRG loading and relocation, a bounded 68000 execution core for the current compiler-generated corpus, process/heap isolation, BIOS console/drive services, and XBIOS Random/Gettime/Settime support.
+
+CI exercises both the host regression suite and real cross-compiled m68k C programs. M2 does not require or redistribute proprietary Atari TOS ROM images; qualification uses synthetic and redistributable test inputs.
+
+The next development phase is M3: VDI/AES abstractions, input translation, an AmigaOS-oriented display backend, and the first redistributable GEM application compatibility corpus.
 
 ## License
 

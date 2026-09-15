@@ -16,8 +16,8 @@ static int32_t dispatch_vdi_trap(struct amtari_context *ctx)
 {
     uint32_t pb = ctx->cpu.d[1];
     uint32_t contrl, intin_addr, ptsin_addr, intout_addr, ptsout_addr;
-    uint16_t opcode, ptsin_pairs, ptsout_pairs, intin_count, intout_count;
-    uint16_t ptsin_count, ptsout_count;
+    uint16_t opcode, ptsin_pairs, intin_count;
+    uint16_t ptsin_count, intout_count = 0u, ptsout_count = 0u;
     int16_t intin[AMTARI_VDI_WORD_MAX];
     int16_t ptsin[AMTARI_VDI_WORD_MAX];
     int16_t intout[AMTARI_VDI_WORD_MAX];
@@ -35,18 +35,13 @@ static int32_t dispatch_vdi_trap(struct amtari_context *ctx)
 
     if (amtari_guest_read16(ctx, contrl + 0u, &opcode) != 0 ||
         amtari_guest_read16(ctx, contrl + 2u, &ptsin_pairs) != 0 ||
-        amtari_guest_read16(ctx, contrl + 4u, &ptsout_pairs) != 0 ||
-        amtari_guest_read16(ctx, contrl + 6u, &intin_count) != 0 ||
-        amtari_guest_read16(ctx, contrl + 8u, &intout_count) != 0)
+        amtari_guest_read16(ctx, contrl + 6u, &intin_count) != 0)
         return AMTARI_EFAULT;
 
-    if (ptsin_pairs > AMTARI_VDI_WORD_MAX / 2u ||
-        ptsout_pairs > AMTARI_VDI_WORD_MAX / 2u ||
-        intin_count > AMTARI_VDI_WORD_MAX || intout_count > AMTARI_VDI_WORD_MAX)
+    if (ptsin_pairs > AMTARI_VDI_WORD_MAX / 2u || intin_count > AMTARI_VDI_WORD_MAX)
         return AMTARI_EINVAL;
 
     ptsin_count = (uint16_t)(ptsin_pairs * 2u);
-    ptsout_count = (uint16_t)(ptsout_pairs * 2u);
 
     for (i = 0u; i < intin_count; ++i) {
         if (amtari_guest_read16(ctx, intin_addr + (uint32_t)i * 2u, &value) != 0)
@@ -62,9 +57,10 @@ static int32_t dispatch_vdi_trap(struct amtari_context *ctx)
     rc = amtari_vdi_dispatch(ctx, opcode,
                              intin_count ? intin : 0, intin_count,
                              ptsin_count ? ptsin : 0, ptsin_count,
-                             intout_count ? intout : 0, intout_count,
-                             ptsout_count ? ptsout : 0, ptsout_count);
+                             intout, AMTARI_VDI_WORD_MAX, &intout_count,
+                             ptsout, AMTARI_VDI_WORD_MAX, &ptsout_count);
     if (rc != 0) return rc;
+    if ((ptsout_count & 1u) != 0u) return AMTARI_EINVAL;
 
     for (i = 0u; i < intout_count; ++i) {
         if (amtari_guest_write16(ctx, intout_addr + (uint32_t)i * 2u,
@@ -76,6 +72,9 @@ static int32_t dispatch_vdi_trap(struct amtari_context *ctx)
                                  (uint16_t)ptsout[i]) != 0)
             return AMTARI_EFAULT;
     }
+    if (amtari_guest_write16(ctx, contrl + 4u, (uint16_t)(ptsout_count / 2u)) != 0 ||
+        amtari_guest_write16(ctx, contrl + 8u, intout_count) != 0)
+        return AMTARI_EFAULT;
     return 0;
 }
 
@@ -89,7 +88,6 @@ static int32_t bios_bconstat(struct amtari_context *ctx)
 {
     uint16_t dev;
     int ready;
-
     if (bios_read_arg16(ctx, 0u, &dev) != 0) return AMTARI_EFAULT;
     if (dev != 2u) return AMTARI_ENOSYS;
     if (ctx->console.input_ready == 0) return AMTARI_EIO;

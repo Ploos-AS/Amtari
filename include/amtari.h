@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AMTARI_VERSION "0.3.1-m3"
+#define AMTARI_VERSION "0.3.2-m3"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_BASEPAGE_SIZE 256u
 #define AMTARI_MEM_BLOCK_MAX 32u
@@ -49,7 +49,9 @@ typedef int32_t (*amtari_vdi_dispatch_fn)(void *opaque, uint16_t opcode,
                                          const int16_t *intin, uint16_t intin_count,
                                          const int16_t *ptsin, uint16_t ptsin_count,
                                          int16_t *intout, uint16_t intout_capacity,
-                                         int16_t *ptsout, uint16_t ptsout_capacity);
+                                         uint16_t *intout_count,
+                                         int16_t *ptsout, uint16_t ptsout_capacity,
+                                         uint16_t *ptsout_count);
 
 struct amtari_cpu_state { uint32_t d[8]; uint32_t a[8]; uint32_t pc; uint16_t sr; };
 struct amtari_guest_memory { uint8_t *data; size_t size; };
@@ -99,7 +101,9 @@ int32_t amtari_vdi_dispatch(struct amtari_context *ctx, uint16_t opcode,
                             const int16_t *intin, uint16_t intin_count,
                             const int16_t *ptsin, uint16_t ptsin_count,
                             int16_t *intout, uint16_t intout_capacity,
-                            int16_t *ptsout, uint16_t ptsout_capacity);
+                            uint16_t *intout_count,
+                            int16_t *ptsout, uint16_t ptsout_capacity,
+                            uint16_t *ptsout_count);
 int amtari_guest_memory_bind(struct amtari_context *ctx, uint8_t *data, size_t size);
 int amtari_guest_range_valid(const struct amtari_context *ctx, uint32_t address, size_t length);
 int amtari_guest_read16(const struct amtari_context *ctx, uint32_t address, uint16_t *value);

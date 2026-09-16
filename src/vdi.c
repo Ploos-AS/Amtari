@@ -17,8 +17,17 @@ static int32_t vdi_polyline(struct amtari_context *ctx,const int16_t *ptsin,uint
 int32_t amtari_vdi_dispatch(struct amtari_context *ctx,uint16_t opcode,const int16_t *intin,uint16_t intin_count,const int16_t *ptsin,uint16_t ptsin_count,int16_t *intout,uint16_t intout_capacity,uint16_t *intout_count,int16_t *ptsout,uint16_t ptsout_capacity,uint16_t *ptsout_count)
 { int32_t rc;if(!ctx||!ctx->initialized||!intout_count||!ptsout_count)return AMTARI_EINVAL;*intout_count=0u;*ptsout_count=0u;if(opcode==1u)return vdi_open_workstation(ctx,intout,intout_capacity,intout_count,ptsout,ptsout_capacity,ptsout_count);if(opcode==6u)return vdi_polyline(ctx,ptsin,ptsin_count);if(opcode==15u||opcode==17u)return vdi_line_attribute(ctx,opcode,intin,intin_count,intout,intout_capacity,intout_count);if(!ctx->vdi.dispatch)return AMTARI_ENOSYS;rc=ctx->vdi.dispatch(ctx->vdi.opaque,opcode,intin,intin_count,ptsin,ptsin_count,intout,intout_capacity,intout_count,ptsout,ptsout_capacity,ptsout_count);if(rc!=0)return rc;if(*intout_count>intout_capacity||*ptsout_count>ptsout_capacity)return AMTARI_EINVAL;return 0; }
 
-/* M3.9 AES host abstraction. Guest AESPB/TRAP #2 routing follows in M3.10. */
 int amtari_aes_bind(struct amtari_context *ctx,amtari_aes_dispatch_fn dispatch_fn,void *opaque)
 { if(ctx==0||!ctx->initialized)return AMTARI_EINVAL;ctx->aes.dispatch=dispatch_fn;ctx->aes.opaque=opaque;return 0; }
+static int32_t aes_appl_init(struct amtari_context *ctx,int16_t *intout,uint16_t capacity,uint16_t *count)
+{
+    uint16_t id;
+    if(intout==0||capacity<1u)return AMTARI_EINVAL;
+    if(ctx->aes.next_application_id==0u)ctx->aes.next_application_id=1u;
+    id=ctx->aes.next_application_id++;
+    intout[0]=(int16_t)id;
+    *count=1u;
+    return 0;
+}
 int32_t amtari_aes_dispatch(struct amtari_context *ctx,uint16_t opcode,const int16_t *intin,uint16_t intin_count,int16_t *intout,uint16_t intout_capacity,uint16_t *intout_count,const uint32_t *addrin,uint16_t addrin_count,uint32_t *addrout,uint16_t addrout_capacity,uint16_t *addrout_count)
-{ int32_t rc;if(ctx==0||!ctx->initialized||intout_count==0||addrout_count==0)return AMTARI_EINVAL;*intout_count=0u;*addrout_count=0u;if(ctx->aes.dispatch==0)return AMTARI_ENOSYS;rc=ctx->aes.dispatch(ctx->aes.opaque,opcode,intin,intin_count,intout,intout_capacity,intout_count,addrin,addrin_count,addrout,addrout_capacity,addrout_count);if(rc!=0)return rc;if(*intout_count>intout_capacity||*addrout_count>addrout_capacity)return AMTARI_EINVAL;return 0; }
+{ int32_t rc;if(ctx==0||!ctx->initialized||intout_count==0||addrout_count==0)return AMTARI_EINVAL;*intout_count=0u;*addrout_count=0u;if(opcode==10u)return aes_appl_init(ctx,intout,intout_capacity,intout_count);if(ctx->aes.dispatch==0)return AMTARI_ENOSYS;rc=ctx->aes.dispatch(ctx->aes.opaque,opcode,intin,intin_count,intout,intout_capacity,intout_count,addrin,addrin_count,addrout,addrout_capacity,addrout_count);if(rc!=0)return rc;if(*intout_count>intout_capacity||*addrout_count>addrout_capacity)return AMTARI_EINVAL;return 0; }

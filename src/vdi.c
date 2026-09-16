@@ -23,11 +23,24 @@ static int32_t aes_appl_init(struct amtari_context *ctx,int16_t *intout,uint16_t
 {
     uint16_t id;
     if(intout==0||capacity<1u)return AMTARI_EINVAL;
+    if(ctx->aes.application_active)return AMTARI_EEXIST;
     if(ctx->aes.next_application_id==0u)ctx->aes.next_application_id=1u;
     id=ctx->aes.next_application_id++;
+    ctx->aes.current_application_id=id;
+    ctx->aes.application_active=1u;
     intout[0]=(int16_t)id;
     *count=1u;
     return 0;
 }
+static int32_t aes_appl_exit(struct amtari_context *ctx,int16_t *intout,uint16_t capacity,uint16_t *count)
+{
+    if(intout==0||capacity<1u)return AMTARI_EINVAL;
+    if(!ctx->aes.application_active)return AMTARI_EINVAL;
+    ctx->aes.application_active=0u;
+    ctx->aes.current_application_id=0u;
+    intout[0]=1;
+    *count=1u;
+    return 0;
+}
 int32_t amtari_aes_dispatch(struct amtari_context *ctx,uint16_t opcode,const int16_t *intin,uint16_t intin_count,int16_t *intout,uint16_t intout_capacity,uint16_t *intout_count,const uint32_t *addrin,uint16_t addrin_count,uint32_t *addrout,uint16_t addrout_capacity,uint16_t *addrout_count)
-{ int32_t rc;if(ctx==0||!ctx->initialized||intout_count==0||addrout_count==0)return AMTARI_EINVAL;*intout_count=0u;*addrout_count=0u;if(opcode==10u)return aes_appl_init(ctx,intout,intout_capacity,intout_count);if(ctx->aes.dispatch==0)return AMTARI_ENOSYS;rc=ctx->aes.dispatch(ctx->aes.opaque,opcode,intin,intin_count,intout,intout_capacity,intout_count,addrin,addrin_count,addrout,addrout_capacity,addrout_count);if(rc!=0)return rc;if(*intout_count>intout_capacity||*addrout_count>addrout_capacity)return AMTARI_EINVAL;return 0; }
+{ int32_t rc;if(ctx==0||!ctx->initialized||intout_count==0||addrout_count==0)return AMTARI_EINVAL;*intout_count=0u;*addrout_count=0u;if(opcode==10u)return aes_appl_init(ctx,intout,intout_capacity,intout_count);if(opcode==19u)return aes_appl_exit(ctx,intout,intout_capacity,intout_count);if(ctx->aes.dispatch==0)return AMTARI_ENOSYS;rc=ctx->aes.dispatch(ctx->aes.opaque,opcode,intin,intin_count,intout,intout_capacity,intout_count,addrin,addrin_count,addrout,addrout_capacity,addrout_count);if(rc!=0)return rc;if(*intout_count>intout_capacity||*addrout_count>addrout_capacity)return AMTARI_EINVAL;return 0; }

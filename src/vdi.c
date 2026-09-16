@@ -1,4 +1,5 @@
 #include "amtari.h"
+#include <string.h>
 
 int amtari_vdi_bind(struct amtari_context *ctx, amtari_vdi_dispatch_fn dispatch_fn, void *opaque)
 { if(ctx==0||!ctx->initialized)return AMTARI_EINVAL; ctx->vdi.dispatch=dispatch_fn; ctx->vdi.opaque=opaque; return 0; }
@@ -6,8 +7,6 @@ int amtari_vdi_line_bind(struct amtari_context *ctx, amtari_vdi_line_fn line_fn,
 { if(ctx==0||!ctx->initialized)return AMTARI_EINVAL; ctx->vdi.line=line_fn; ctx->vdi.line_opaque=opaque; return 0; }
 int amtari_vdi_configure(struct amtari_context *ctx,uint16_t width,uint16_t height,uint16_t colors)
 { if(ctx==0||!ctx->initialized||width==0u||height==0u||colors==0u)return AMTARI_EINVAL; ctx->vdi.width=width;ctx->vdi.height=height;ctx->vdi.colors=colors;if(ctx->vdi.next_handle==0u)ctx->vdi.next_handle=1u;if(ctx->vdi.line_style==0u)ctx->vdi.line_style=1u;return 0; }
-/* Classic VDI v_opnwk returns work_out[0..44] through intout and
- * work_out[45..56] through ptsout. Keep unsupported capability fields zero. */
 static int32_t vdi_open_workstation(struct amtari_context *ctx,int16_t *intout,uint16_t ic,uint16_t *ni,int16_t *ptsout,uint16_t pc,uint16_t *np)
 { uint16_t i;if(ctx->vdi.width==0u||ctx->vdi.height==0u||ctx->vdi.colors==0u)return AMTARI_ENOSYS;if(ic<45u||pc<12u||!intout||!ptsout)return AMTARI_EINVAL;for(i=0u;i<45u;++i)intout[i]=0;for(i=0u;i<12u;++i)ptsout[i]=0;intout[0]=(int16_t)(ctx->vdi.width-1u);intout[1]=(int16_t)(ctx->vdi.height-1u);intout[3]=1;intout[4]=1;intout[5]=1;intout[6]=1;intout[7]=1;intout[8]=1;intout[9]=1;intout[10]=1;intout[13]=(int16_t)ctx->vdi.colors;intout[35]=1;*ni=45u;*np=12u;ctx->vdi.next_handle++;return 0; }
 static int32_t vdi_line_attribute(struct amtari_context *ctx,uint16_t opcode,const int16_t *intin,uint16_t n,int16_t *intout,uint16_t cap,uint16_t *count)
@@ -19,28 +18,13 @@ int32_t amtari_vdi_dispatch(struct amtari_context *ctx,uint16_t opcode,const int
 
 int amtari_aes_bind(struct amtari_context *ctx,amtari_aes_dispatch_fn dispatch_fn,void *opaque)
 { if(ctx==0||!ctx->initialized)return AMTARI_EINVAL;ctx->aes.dispatch=dispatch_fn;ctx->aes.opaque=opaque;return 0; }
+int amtari_aes_set_application_name(struct amtari_context *ctx,const char *name)
+{ size_t n;if(ctx==0||!ctx->initialized||name==0)return AMTARI_EINVAL;n=strlen(name);if(n==0u||n>8u)return AMTARI_EINVAL;memset(ctx->aes.application_name,0,sizeof(ctx->aes.application_name));memcpy(ctx->aes.application_name,name,n);return 0; }
 static int32_t aes_appl_init(struct amtari_context *ctx,int16_t *intout,uint16_t capacity,uint16_t *count)
-{
-    uint16_t id;
-    if(intout==0||capacity<1u)return AMTARI_EINVAL;
-    if(ctx->aes.application_active)return AMTARI_EEXIST;
-    if(ctx->aes.next_application_id==0u)ctx->aes.next_application_id=1u;
-    id=ctx->aes.next_application_id++;
-    ctx->aes.current_application_id=id;
-    ctx->aes.application_active=1u;
-    intout[0]=(int16_t)id;
-    *count=1u;
-    return 0;
-}
+{ uint16_t id;if(intout==0||capacity<1u)return AMTARI_EINVAL;if(ctx->aes.application_active)return AMTARI_EEXIST;if(ctx->aes.next_application_id==0u)ctx->aes.next_application_id=1u;id=ctx->aes.next_application_id++;ctx->aes.current_application_id=id;ctx->aes.application_active=1u;intout[0]=(int16_t)id;*count=1u;return 0; }
 static int32_t aes_appl_exit(struct amtari_context *ctx,int16_t *intout,uint16_t capacity,uint16_t *count)
-{
-    if(intout==0||capacity<1u)return AMTARI_EINVAL;
-    if(!ctx->aes.application_active)return AMTARI_EINVAL;
-    ctx->aes.application_active=0u;
-    ctx->aes.current_application_id=0u;
-    intout[0]=1;
-    *count=1u;
-    return 0;
-}
+{ if(intout==0||capacity<1u)return AMTARI_EINVAL;if(!ctx->aes.application_active)return AMTARI_EINVAL;ctx->aes.application_active=0u;ctx->aes.current_application_id=0u;intout[0]=1;*count=1u;return 0; }
+static int32_t aes_appl_find(struct amtari_context *ctx,const uint32_t *addrin,uint16_t addrin_count,int16_t *intout,uint16_t capacity,uint16_t *count)
+{ char name[9];uint16_t i;uint32_t address;if(!intout||capacity<1u||!addrin||addrin_count<1u)return AMTARI_EINVAL;intout[0]=-1;*count=1u;if(!ctx->aes.application_active||ctx->aes.application_name[0]=='\0')return 0;address=addrin[0];for(i=0u;i<8u;++i){if(!amtari_guest_range_valid(ctx,address+i,1u))return AMTARI_EFAULT;name[i]=(char)ctx->memory.data[address+i];if(name[i]=='\0')break;}if(i==8u)name[8]='\0';else name[i]='\0';if(strcmp(name,ctx->aes.application_name)==0)intout[0]=(int16_t)ctx->aes.current_application_id;return 0; }
 int32_t amtari_aes_dispatch(struct amtari_context *ctx,uint16_t opcode,const int16_t *intin,uint16_t intin_count,int16_t *intout,uint16_t intout_capacity,uint16_t *intout_count,const uint32_t *addrin,uint16_t addrin_count,uint32_t *addrout,uint16_t addrout_capacity,uint16_t *addrout_count)
-{ int32_t rc;if(ctx==0||!ctx->initialized||intout_count==0||addrout_count==0)return AMTARI_EINVAL;*intout_count=0u;*addrout_count=0u;if(opcode==10u)return aes_appl_init(ctx,intout,intout_capacity,intout_count);if(opcode==19u)return aes_appl_exit(ctx,intout,intout_capacity,intout_count);if(ctx->aes.dispatch==0)return AMTARI_ENOSYS;rc=ctx->aes.dispatch(ctx->aes.opaque,opcode,intin,intin_count,intout,intout_capacity,intout_count,addrin,addrin_count,addrout,addrout_capacity,addrout_count);if(rc!=0)return rc;if(*intout_count>intout_capacity||*addrout_count>addrout_capacity)return AMTARI_EINVAL;return 0; }
+{ int32_t rc;if(ctx==0||!ctx->initialized||intout_count==0||addrout_count==0)return AMTARI_EINVAL;*intout_count=0u;*addrout_count=0u;if(opcode==10u)return aes_appl_init(ctx,intout,intout_capacity,intout_count);if(opcode==13u)return aes_appl_find(ctx,addrin,addrin_count,intout,intout_capacity,intout_count);if(opcode==19u)return aes_appl_exit(ctx,intout,intout_capacity,intout_count);if(ctx->aes.dispatch==0)return AMTARI_ENOSYS;rc=ctx->aes.dispatch(ctx->aes.opaque,opcode,intin,intin_count,intout,intout_capacity,intout_count,addrin,addrin_count,addrout,addrout_capacity,addrout_count);if(rc!=0)return rc;if(*intout_count>intout_capacity||*addrout_count>addrout_capacity)return AMTARI_EINVAL;return 0; }

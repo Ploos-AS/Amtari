@@ -34,6 +34,7 @@ int main(void){
  /* MU_M1 */ apb(mem,25,16,7,0);w16(mem,0x380,0x0004);w16(mem,0x388,0);w16(mem,0x38a,100);w16(mem,0x38c,50);w16(mem,0x38e,50);w16(mem,0x390,50);trap2(&c,mem);assert(r16(&c,0x3c0)==0x0004);
  /* MU_M2 */ apb(mem,25,16,7,0);w16(mem,0x380,0x0008);w16(mem,0x392,0);w16(mem,0x394,100);w16(mem,0x396,50);w16(mem,0x398,50);w16(mem,0x39a,50);trap2(&c,mem);assert(r16(&c,0x3c0)==0x0008);
  /* MU_TIMER fallback */ m.x=10;m.y=10;apb(mem,25,16,7,0);w16(mem,0x380,0x0024);w16(mem,0x388,0);w16(mem,0x38a,100);w16(mem,0x38c,50);w16(mem,0x38e,50);w16(mem,0x390,50);w16(mem,0x39c,7);w16(mem,0x39e,0);trap2(&c,mem);assert(r16(&c,0x3c0)==0x0020&&t.ms==7);
+ /* simultaneous MU_KEYBD + MU_BUTTON + MU_M1 + MU_M2 */ key.ready=1;key.key=0x3062;m.x=123;m.y=77;m.buttons=1;m.kstate=4;apb(mem,25,16,7,0);w16(mem,0x380,0x000f);w16(mem,0x382,1);w16(mem,0x384,1);w16(mem,0x386,1);w16(mem,0x388,0);w16(mem,0x38a,100);w16(mem,0x38c,50);w16(mem,0x38e,50);w16(mem,0x390,50);w16(mem,0x392,0);w16(mem,0x394,100);w16(mem,0x396,50);w16(mem,0x398,50);w16(mem,0x39a,50);trap2(&c,mem);assert(r16(&c,0x3c0)==0x000f);assert(r16(&c,0x3c2)==123&&r16(&c,0x3c4)==77);assert(r16(&c,0x3c6)==1&&r16(&c,0x3c8)==4);assert(r16(&c,0x3ca)==0x3062&&r16(&c,0x3cc)==1);
  /* appl_exit */ apb(mem,19,0,1,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&!c.aes.application_active);
  return 0;
 }

@@ -27,10 +27,11 @@ int main(void) {
  for(i=0;i<16;i++){mem[0x520+i]=(uint8_t)(0xa0+i);} apb(mem,12,2,1,1);w16(mem,0x380,id);w16(mem,0x382,16);w32(mem,0x400,0x520);trap2(&c,mem);memset(mem+0x540,0,16);apb(mem,11,2,1,1);w16(mem,0x380,id);w16(mem,0x382,16);w32(mem,0x400,0x540);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&!memcmp(mem+0x520,mem+0x540,16));
  apb(mem,12,2,1,1);w16(mem,0x380,id);w16(mem,0x382,16);w32(mem,0x400,0x520);trap2(&c,mem);apb(mem,23,0,1,1);w32(mem,0x400,0x560);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&!memcmp(mem+0x520,mem+0x560,16));
  assert(!amtari_aes_timer_bind(&c,timer,&t));apb(mem,24,2,1,0);w16(mem,0x380,25);w16(mem,0x382,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&t.ms==25);
- /* evnt_keybd opcode 20: no input words, one keycode result */
  key.ready=1;key.key=0x1e61;apb(mem,20,0,1,0);trap2(&c,mem);assert(r16(&c,0x3c0)==0x1e61&&key.reads==1);
  key.ready=0;apb(mem,20,0,1,0);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
  assert(!amtari_aes_mouse_bind(&c,mouse,&m));
+ /* graf_mkstate opcode 79: current mouse coordinates, buttons and modifiers */
+ m.x=321;m.y=199;m.buttons=3;m.kstate=12;apb(mem,79,0,5,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==321&&r16(&c,0x3c4)==199&&r16(&c,0x3c6)==3&&r16(&c,0x3c8)==12);
  m.x=123;m.y=77;m.buttons=1;m.kstate=4;apb(mem,21,3,5,0);w16(mem,0x380,1);w16(mem,0x382,1);w16(mem,0x384,1);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==123&&r16(&c,0x3c4)==77&&r16(&c,0x3c6)==1&&r16(&c,0x3c8)==4);
  m.buttons=0;apb(mem,21,3,5,0);w16(mem,0x380,1);w16(mem,0x382,1);w16(mem,0x384,1);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
  m.buttons=1;apb(mem,22,5,5,0);w16(mem,0x380,0);w16(mem,0x382,100);w16(mem,0x384,50);w16(mem,0x386,50);w16(mem,0x388,50);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==123&&r16(&c,0x3c4)==77&&r16(&c,0x3c6)==1&&r16(&c,0x3c8)==4);

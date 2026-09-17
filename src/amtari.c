@@ -20,6 +20,11 @@ int amtari_init(struct amtari_context *ctx)
     ctx->current_drive = 0u;
     ctx->next_load_address = 0x1000u;
     ctx->random_seed = 1u;
+    ctx->aes.workstation_handle = 1u;
+    ctx->aes.char_width = 8u;
+    ctx->aes.char_height = 16u;
+    ctx->aes.box_width = 8u;
+    ctx->aes.box_height = 16u;
     ctx->initialized = 1;
     return 0;
 }

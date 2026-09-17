@@ -6,7 +6,6 @@
 struct timer_fixture { int calls; uint32_t ms; };
 struct key_fixture { int ready, key, reads; };
 struct mouse_fixture { int ready; int16_t x, y; uint16_t buttons, kstate; };
-
 static int timer(void *o, uint32_t ms) { struct timer_fixture *f=o; f->calls++; f->ms=ms; return 0; }
 static int kready(void *o) { return ((struct key_fixture *)o)->ready; }
 static int kget(void *o) { struct key_fixture *f=o; f->reads++; f->ready=0; return f->key; }
@@ -19,33 +18,27 @@ static void trap2(struct amtari_context *c, uint8_t *m) { w16(m,0x20,0x4e42); c-
 static uint16_t r16(struct amtari_context *c, uint32_t a) { uint16_t v=0; assert(!amtari_guest_read16(c,a,&v)); return v; }
 
 int main(void) {
-    struct amtari_context c={0}; uint8_t mem[2048]; uint16_t id; unsigned i;
-    struct timer_fixture t={0}; struct key_fixture key={1,0x1e61,0}; struct mouse_fixture m={1,123,77,1,4};
-    assert(!amtari_init(&c)); memset(mem,0,sizeof(mem)); assert(!amtari_guest_memory_bind(&c,mem,sizeof(mem))); assert(!amtari_aes_set_application_name(&c,"AMTARI"));
-    assert(!amtari_console_bind(&c,kget,kput,&key)); assert(!amtari_console_status_bind(&c,kready,0));
-
-    apb(mem,10,0,1,0); trap2(&c,mem); id=r16(&c,0x3c0); assert(id==1);
-    memcpy(mem+0x500,"AMTARI",7); apb(mem,13,0,1,1); w32(mem,0x400,0x500); trap2(&c,mem); assert(r16(&c,0x3c0)==id);
-
-    for (i=0; i<16; i++) { mem[0x520+i]=(uint8_t)(0xa0+i); }
-    apb(mem,12,2,1,1); w16(mem,0x380,id); w16(mem,0x382,16); w32(mem,0x400,0x520); trap2(&c,mem);
-    memset(mem+0x540,0,16); apb(mem,11,2,1,1); w16(mem,0x380,id); w16(mem,0x382,16); w32(mem,0x400,0x540); trap2(&c,mem); assert(r16(&c,0x3c0)==1 && !memcmp(mem+0x520,mem+0x540,16));
-
-    apb(mem,12,2,1,1); w16(mem,0x380,id); w16(mem,0x382,16); w32(mem,0x400,0x520); trap2(&c,mem); apb(mem,23,0,1,1); w32(mem,0x400,0x560); trap2(&c,mem); assert(r16(&c,0x3c0)==1 && !memcmp(mem+0x520,mem+0x560,16));
-    assert(!amtari_aes_timer_bind(&c,timer,&t)); apb(mem,24,2,1,0); w16(mem,0x380,25); w16(mem,0x382,0); trap2(&c,mem); assert(r16(&c,0x3c0)==1 && t.ms==25);
-
-    assert(!amtari_aes_mouse_bind(&c,mouse,&m));
-    apb(mem,22,5,5,0); w16(mem,0x380,0); w16(mem,0x382,100); w16(mem,0x384,50); w16(mem,0x386,50); w16(mem,0x388,50); trap2(&c,mem); assert(r16(&c,0x3c0)==1 && r16(&c,0x3c2)==123 && r16(&c,0x3c4)==77 && r16(&c,0x3c6)==1 && r16(&c,0x3c8)==4);
-    m.x=10; m.y=10; apb(mem,22,5,5,0); w16(mem,0x380,1); w16(mem,0x382,100); w16(mem,0x384,50); w16(mem,0x386,50); w16(mem,0x388,50); trap2(&c,mem); assert(r16(&c,0x3c0)==1 && r16(&c,0x3c2)==10 && r16(&c,0x3c4)==10);
-
-    apb(mem,12,2,1,1); w16(mem,0x380,id); w16(mem,0x382,16); w32(mem,0x400,0x520); trap2(&c,mem); apb(mem,25,16,7,1); w16(mem,0x380,0x0010); w32(mem,0x400,0x580); trap2(&c,mem); assert(r16(&c,0x3c0)==0x0010);
-    key.ready=1; key.key=0x1e61; apb(mem,25,16,7,0); w16(mem,0x380,1); trap2(&c,mem); assert(r16(&c,0x3c0)==1 && r16(&c,0x3ca)==0x1e61);
-    m.x=123; m.y=77; m.buttons=1; m.kstate=4; apb(mem,25,16,7,0); w16(mem,0x380,2); w16(mem,0x382,1); w16(mem,0x384,1); w16(mem,0x386,1); trap2(&c,mem); assert(r16(&c,0x3c0)==2);
-    apb(mem,25,16,7,0); w16(mem,0x380,4); w16(mem,0x388,0); w16(mem,0x38a,100); w16(mem,0x38c,50); w16(mem,0x38e,50); w16(mem,0x390,50); trap2(&c,mem); assert(r16(&c,0x3c0)==4);
-    apb(mem,25,16,7,0); w16(mem,0x380,8); w16(mem,0x392,0); w16(mem,0x394,100); w16(mem,0x396,50); w16(mem,0x398,50); w16(mem,0x39a,50); trap2(&c,mem); assert(r16(&c,0x3c0)==8);
-    m.x=10; m.y=10; apb(mem,25,16,7,0); w16(mem,0x380,0x24); w16(mem,0x388,0); w16(mem,0x38a,100); w16(mem,0x38c,50); w16(mem,0x38e,50); w16(mem,0x390,50); w16(mem,0x39c,7); trap2(&c,mem); assert(r16(&c,0x3c0)==0x20 && t.ms==7);
-
-    key.ready=1; key.key=0x3062; m.x=123; m.y=77; m.buttons=1; m.kstate=4; apb(mem,25,16,7,0); w16(mem,0x380,0x0f); w16(mem,0x382,1); w16(mem,0x384,1); w16(mem,0x386,1); w16(mem,0x388,0); w16(mem,0x38a,100); w16(mem,0x38c,50); w16(mem,0x38e,50); w16(mem,0x390,50); w16(mem,0x392,0); w16(mem,0x394,100); w16(mem,0x396,50); w16(mem,0x398,50); w16(mem,0x39a,50); trap2(&c,mem); assert(r16(&c,0x3c0)==0x0f && r16(&c,0x3ca)==0x3062 && r16(&c,0x3cc)==1);
-    apb(mem,19,0,1,0); trap2(&c,mem); assert(r16(&c,0x3c0)==1 && !c.aes.application_active);
-    return 0;
+ struct amtari_context c={0}; uint8_t mem[2048]; uint16_t id; unsigned i;
+ struct timer_fixture t={0}; struct key_fixture key={1,0x1e61,0}; struct mouse_fixture m={1,123,77,1,4};
+ assert(!amtari_init(&c)); memset(mem,0,sizeof(mem)); assert(!amtari_guest_memory_bind(&c,mem,sizeof(mem))); assert(!amtari_aes_set_application_name(&c,"AMTARI"));
+ assert(!amtari_console_bind(&c,kget,kput,&key)); assert(!amtari_console_status_bind(&c,kready,0));
+ apb(mem,10,0,1,0);trap2(&c,mem);id=r16(&c,0x3c0);assert(id==1);
+ memcpy(mem+0x500,"AMTARI",7);apb(mem,13,0,1,1);w32(mem,0x400,0x500);trap2(&c,mem);assert(r16(&c,0x3c0)==id);
+ for(i=0;i<16;i++){mem[0x520+i]=(uint8_t)(0xa0+i);} apb(mem,12,2,1,1);w16(mem,0x380,id);w16(mem,0x382,16);w32(mem,0x400,0x520);trap2(&c,mem);memset(mem+0x540,0,16);apb(mem,11,2,1,1);w16(mem,0x380,id);w16(mem,0x382,16);w32(mem,0x400,0x540);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&!memcmp(mem+0x520,mem+0x540,16));
+ apb(mem,12,2,1,1);w16(mem,0x380,id);w16(mem,0x382,16);w32(mem,0x400,0x520);trap2(&c,mem);apb(mem,23,0,1,1);w32(mem,0x400,0x560);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&!memcmp(mem+0x520,mem+0x560,16));
+ assert(!amtari_aes_timer_bind(&c,timer,&t));apb(mem,24,2,1,0);w16(mem,0x380,25);w16(mem,0x382,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&t.ms==25);
+ assert(!amtari_aes_mouse_bind(&c,mouse,&m));
+ /* evnt_button opcode 21: clicks, mask, state -> clicks,x,y,buttons,kstate */
+ m.x=123;m.y=77;m.buttons=1;m.kstate=4;apb(mem,21,3,5,0);w16(mem,0x380,1);w16(mem,0x382,1);w16(mem,0x384,1);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==123&&r16(&c,0x3c4)==77&&r16(&c,0x3c6)==1&&r16(&c,0x3c8)==4);
+ m.buttons=0;apb(mem,21,3,5,0);w16(mem,0x380,1);w16(mem,0x382,1);w16(mem,0x384,1);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
+ m.buttons=1;apb(mem,22,5,5,0);w16(mem,0x380,0);w16(mem,0x382,100);w16(mem,0x384,50);w16(mem,0x386,50);w16(mem,0x388,50);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==123&&r16(&c,0x3c4)==77&&r16(&c,0x3c6)==1&&r16(&c,0x3c8)==4);
+ m.x=10;m.y=10;apb(mem,22,5,5,0);w16(mem,0x380,1);w16(mem,0x382,100);w16(mem,0x384,50);w16(mem,0x386,50);w16(mem,0x388,50);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==10&&r16(&c,0x3c4)==10);
+ apb(mem,12,2,1,1);w16(mem,0x380,id);w16(mem,0x382,16);w32(mem,0x400,0x520);trap2(&c,mem);apb(mem,25,16,7,1);w16(mem,0x380,0x0010);w32(mem,0x400,0x580);trap2(&c,mem);assert(r16(&c,0x3c0)==0x0010);
+ key.ready=1;key.key=0x1e61;apb(mem,25,16,7,0);w16(mem,0x380,1);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3ca)==0x1e61);
+ m.x=123;m.y=77;m.buttons=1;m.kstate=4;apb(mem,25,16,7,0);w16(mem,0x380,2);w16(mem,0x382,1);w16(mem,0x384,1);w16(mem,0x386,1);trap2(&c,mem);assert(r16(&c,0x3c0)==2);
+ apb(mem,25,16,7,0);w16(mem,0x380,4);w16(mem,0x388,0);w16(mem,0x38a,100);w16(mem,0x38c,50);w16(mem,0x38e,50);w16(mem,0x390,50);trap2(&c,mem);assert(r16(&c,0x3c0)==4);
+ apb(mem,25,16,7,0);w16(mem,0x380,8);w16(mem,0x392,0);w16(mem,0x394,100);w16(mem,0x396,50);w16(mem,0x398,50);w16(mem,0x39a,50);trap2(&c,mem);assert(r16(&c,0x3c0)==8);
+ m.x=10;m.y=10;apb(mem,25,16,7,0);w16(mem,0x380,0x24);w16(mem,0x388,0);w16(mem,0x38a,100);w16(mem,0x38c,50);w16(mem,0x38e,50);w16(mem,0x390,50);w16(mem,0x39c,7);trap2(&c,mem);assert(r16(&c,0x3c0)==0x20&&t.ms==7);
+ key.ready=1;key.key=0x3062;m.x=123;m.y=77;m.buttons=1;m.kstate=4;apb(mem,25,16,7,0);w16(mem,0x380,0x0f);w16(mem,0x382,1);w16(mem,0x384,1);w16(mem,0x386,1);w16(mem,0x388,0);w16(mem,0x38a,100);w16(mem,0x38c,50);w16(mem,0x38e,50);w16(mem,0x390,50);w16(mem,0x392,0);w16(mem,0x394,100);w16(mem,0x396,50);w16(mem,0x398,50);w16(mem,0x39a,50);trap2(&c,mem);assert(r16(&c,0x3c0)==0x0f&&r16(&c,0x3ca)==0x3062&&r16(&c,0x3cc)==1);
+ apb(mem,19,0,1,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&!c.aes.application_active);return 0;
 }

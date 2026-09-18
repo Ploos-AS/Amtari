@@ -34,6 +34,9 @@ int main(void) {
  assert(!amtari_aes_mouse_bind(&c,mouse,&m));
  apb(mem,77,0,5,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==8&&r16(&c,0x3c4)==16&&r16(&c,0x3c6)==8&&r16(&c,0x3c8)==16);
  assert(!amtari_aes_graf_configure(&c,7,9,18,10,20));apb(mem,77,0,5,0);trap2(&c,mem);assert(r16(&c,0x3c0)==7&&r16(&c,0x3c2)==9&&r16(&c,0x3c4)==18&&r16(&c,0x3c6)==10&&r16(&c,0x3c8)==20);
+ /* graf_dragbox opcode 71: cooperative final mouse position clamped to bounds */
+ m.x=180;m.y=120;apb(mem,71,8,3,0);w16(mem,0x380,20);w16(mem,0x382,10);w16(mem,0x384,100);w16(mem,0x386,60);w16(mem,0x388,50);w16(mem,0x38a,40);w16(mem,0x38c,100);w16(mem,0x38e,80);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==130&&r16(&c,0x3c4)==110);
+ m.x=70;m.y=55;apb(mem,71,8,3,0);w16(mem,0x380,20);w16(mem,0x382,10);w16(mem,0x384,100);w16(mem,0x386,60);w16(mem,0x388,50);w16(mem,0x38a,40);w16(mem,0x38c,100);w16(mem,0x38e,80);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==70&&r16(&c,0x3c4)==55);
  /* graf_rubberbox opcode 70: cooperative mouse snapshot with minimum dimensions */
  m.x=140;m.y=95;apb(mem,70,4,3,0);w16(mem,0x380,100);w16(mem,0x382,50);w16(mem,0x384,20);w16(mem,0x386,30);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==41&&r16(&c,0x3c4)==46);
  m.x=105;m.y=55;apb(mem,70,4,3,0);w16(mem,0x380,100);w16(mem,0x382,50);w16(mem,0x384,20);w16(mem,0x386,30);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==20&&r16(&c,0x3c4)==30);

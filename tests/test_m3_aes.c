@@ -34,6 +34,8 @@ int main(void) {
  assert(!amtari_aes_mouse_bind(&c,mouse,&m));
  apb(mem,77,0,5,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==8&&r16(&c,0x3c4)==16&&r16(&c,0x3c6)==8&&r16(&c,0x3c8)==16);
  assert(!amtari_aes_graf_configure(&c,7,9,18,10,20));apb(mem,77,0,5,0);trap2(&c,mem);assert(r16(&c,0x3c0)==7&&r16(&c,0x3c2)==9&&r16(&c,0x3c4)==18&&r16(&c,0x3c6)==10&&r16(&c,0x3c8)==20);
+ /* graf_shrinkbox opcode 74: host-neutral animation hint from source to destination rectangle */
+ apb(mem,74,8,1,0);w16(mem,0x380,320);w16(mem,0x382,180);w16(mem,0x384,30);w16(mem,0x386,20);w16(mem,0x388,100);w16(mem,0x38a,60);w16(mem,0x38c,20);w16(mem,0x38e,12);trap2(&c,mem);assert(r16(&c,0x3c0)==1);
  /* graf_growbox opcode 73: host-neutral animation hint from source to destination rectangle */
  apb(mem,73,8,1,0);w16(mem,0x380,100);w16(mem,0x382,60);w16(mem,0x384,20);w16(mem,0x386,12);w16(mem,0x388,30);w16(mem,0x38a,20);w16(mem,0x38c,320);w16(mem,0x38e,180);trap2(&c,mem);assert(r16(&c,0x3c0)==1);
  /* graf_movebox opcode 72: animation hint completes successfully in host-neutral backend */

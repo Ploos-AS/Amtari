@@ -34,6 +34,9 @@ int main(void) {
  assert(!amtari_aes_mouse_bind(&c,mouse,&m));
  apb(mem,77,0,5,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==8&&r16(&c,0x3c4)==16&&r16(&c,0x3c6)==8&&r16(&c,0x3c8)==16);
  assert(!amtari_aes_graf_configure(&c,7,9,18,10,20));apb(mem,77,0,5,0);trap2(&c,mem);assert(r16(&c,0x3c0)==7&&r16(&c,0x3c2)==9&&r16(&c,0x3c4)==18&&r16(&c,0x3c6)==10&&r16(&c,0x3c8)==20);
+ /* graf_watchbox opcode 75: cooperative button-state result for a guest object tree */
+ m.ready=1;m.buttons=1;apb(mem,75,3,1,1);w16(mem,0x380,2);w16(mem,0x382,1);w16(mem,0x384,0);w32(mem,0x400,0x600);trap2(&c,mem);assert(r16(&c,0x3c0)==1);
+ m.buttons=0;apb(mem,75,3,1,1);w16(mem,0x380,2);w16(mem,0x382,1);w16(mem,0x384,0);w32(mem,0x400,0x600);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
  /* graf_shrinkbox opcode 74: host-neutral animation hint from source to destination rectangle */
  apb(mem,74,8,1,0);w16(mem,0x380,320);w16(mem,0x382,180);w16(mem,0x384,30);w16(mem,0x386,20);w16(mem,0x388,100);w16(mem,0x38a,60);w16(mem,0x38c,20);w16(mem,0x38e,12);trap2(&c,mem);assert(r16(&c,0x3c0)==1);
  /* graf_growbox opcode 73: host-neutral animation hint from source to destination rectangle */

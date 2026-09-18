@@ -34,6 +34,9 @@ int main(void) {
  assert(!amtari_aes_mouse_bind(&c,mouse,&m));
  apb(mem,77,0,5,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==8&&r16(&c,0x3c4)==16&&r16(&c,0x3c6)==8&&r16(&c,0x3c8)==16);
  assert(!amtari_aes_graf_configure(&c,7,9,18,10,20));apb(mem,77,0,5,0);trap2(&c,mem);assert(r16(&c,0x3c0)==7&&r16(&c,0x3c2)==9&&r16(&c,0x3c4)==18&&r16(&c,0x3c6)==10&&r16(&c,0x3c8)==20);
+ /* graf_rubberbox opcode 70: cooperative mouse snapshot with minimum dimensions */
+ m.x=140;m.y=95;apb(mem,70,4,3,0);w16(mem,0x380,100);w16(mem,0x382,50);w16(mem,0x384,20);w16(mem,0x386,30);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==41&&r16(&c,0x3c4)==46);
+ m.x=105;m.y=55;apb(mem,70,4,3,0);w16(mem,0x380,100);w16(mem,0x382,50);w16(mem,0x384,20);w16(mem,0x386,30);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&r16(&c,0x3c2)==20&&r16(&c,0x3c4)==30);
  /* graf_mouse opcode 78: built-in shape, hide/show and USER_DEF guest pointer */
  assert(!amtari_aes_cursor_bind(&c,cursor,&cur));apb(mem,78,1,1,1);w16(mem,0x380,3);w32(mem,0x400,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&cur.calls==1&&cur.mode==3&&cur.form==0);
  apb(mem,78,1,1,1);w16(mem,0x380,256);w32(mem,0x400,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&cur.mode==256);

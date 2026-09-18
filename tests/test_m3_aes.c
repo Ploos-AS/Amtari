@@ -68,6 +68,8 @@ int main(void) {
  apb(mem,25,16,7,0);w16(mem,0x380,8);w16(mem,0x392,0);w16(mem,0x394,100);w16(mem,0x396,50);w16(mem,0x398,50);w16(mem,0x39a,50);trap2(&c,mem);assert(r16(&c,0x3c0)==8);
  m.x=10;m.y=10;apb(mem,25,16,7,0);w16(mem,0x380,0x24);w16(mem,0x388,0);w16(mem,0x38a,100);w16(mem,0x38c,50);w16(mem,0x38e,50);w16(mem,0x390,50);w16(mem,0x39c,7);trap2(&c,mem);assert(r16(&c,0x3c0)==0x20&&t.ms==7);
  key.ready=1;key.key=0x3062;m.x=123;m.y=77;m.buttons=1;m.kstate=4;apb(mem,25,16,7,0);w16(mem,0x380,0x0f);w16(mem,0x382,1);w16(mem,0x384,1);w16(mem,0x386,1);w16(mem,0x388,0);w16(mem,0x38a,100);w16(mem,0x38c,50);w16(mem,0x38e,50);w16(mem,0x390,50);w16(mem,0x392,0);w16(mem,0x394,100);w16(mem,0x396,50);w16(mem,0x398,50);w16(mem,0x39a,50);trap2(&c,mem);assert(r16(&c,0x3c0)==0x0f&&r16(&c,0x3ca)==0x3062&&r16(&c,0x3cc)==1);
+ /* scrp_write opcode 81: update AES clipboard directory from guest string */
+ strcpy((char*)mem+0x640,"D:\\SCRAP\\");apb(mem,81,0,1,1);w32(mem,0x400,0x640);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&!strcmp(c.aes.scrap_path,"D:\\SCRAP\\"));
  /* scrp_read opcode 80: copy current AES clipboard directory to guest buffer */
  strcpy(c.aes.scrap_path,"C:\\CLIPBRD\\");memset(mem+0x620,0xaa,32);apb(mem,80,0,1,1);w32(mem,0x400,0x620);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&!strcmp((char*)mem+0x620,"C:\\CLIPBRD\\"));
  apb(mem,19,0,1,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1&&!c.aes.application_active);return 0;

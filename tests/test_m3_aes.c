@@ -76,12 +76,12 @@ int main(void) {
  apb(mem,105,6,1,0);w16(mem,0x380,2);w16(mem,0x382,5);w16(mem,0x384,25);w16(mem,0x386,35);w16(mem,0x388,280);w16(mem,0x38a,150);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,104,2,5,0);w16(mem,0x380,2);w16(mem,0x382,5);trap2(&c,mem);assert(r16(&c,0x3c0)==1);assert(r16(&c,0x3c2)==25&&r16(&c,0x3c4)==35&&r16(&c,0x3c6)==280&&r16(&c,0x3c8)==150);
  /* wind_get opcode 104: query current/work rectangle foundation */
  apb(mem,104,2,5,0);w16(mem,0x380,1);w16(mem,0x382,4);trap2(&c,mem);assert(r16(&c,0x3c0)==1);assert(r16(&c,0x3c2)==0&&r16(&c,0x3c4)==0&&r16(&c,0x3c6)==640&&r16(&c,0x3c8)==400);
- /* wind_delete opcode 103: accept allocated handles and reject unknown ones */
- apb(mem,103,1,1,0);w16(mem,0x380,1);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,103,1,1,0);w16(mem,0x380,99);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
- /* wind_close opcode 102: accept allocated handles and reject unknown ones */
- apb(mem,102,1,1,0);w16(mem,0x380,1);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,102,1,1,0);w16(mem,0x380,99);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
  /* wind_open opcode 101: accept allocated handles and reject unknown ones */
  apb(mem,101,5,1,0);w16(mem,0x380,1);w16(mem,0x382,10);w16(mem,0x384,20);w16(mem,0x386,320);w16(mem,0x388,180);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,101,5,1,0);w16(mem,0x380,99);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
+ /* wind_close opcode 102: accept allocated handles and reject unknown ones */
+ apb(mem,102,1,1,0);w16(mem,0x380,1);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,102,1,1,0);w16(mem,0x380,99);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
+ /* wind_delete opcode 103: accept allocated handles and reject unknown ones */
+ apb(mem,103,1,1,0);w16(mem,0x380,1);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,103,1,1,0);w16(mem,0x380,99);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
  /* fsel_exinput opcode 91: extended selector accepts path, filename and title buffers */
  strcpy((char*)mem+0x680,"C:\\*.*");strcpy((char*)mem+0x6c0,"README.TXT");strcpy((char*)mem+0x700,"Open file");apb(mem,91,1,1,3);w16(mem,0x380,0);w32(mem,0x400,0x680);w32(mem,0x404,0x6c0);w32(mem,0x408,0x700);trap2(&c,mem);assert(r16(&c,0x3c0)==1);
  /* fsel_input opcode 90: host-neutral selector returns success without a UI backend */

@@ -2,7 +2,7 @@
 #define AMTARI_H
 #include <stddef.h>
 #include <stdint.h>
-#define AMTARI_VERSION "0.3.46-m3"
+#define AMTARI_VERSION "0.3.47-m3"
 #define AMTARI_PATH_MAX 260
 #define AMTARI_SCRAP_PATH_MAX 128
 #define AMTARI_BASEPAGE_SIZE 256u

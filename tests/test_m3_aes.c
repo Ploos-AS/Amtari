@@ -74,8 +74,8 @@ int main(void) {
  apb(mem,105,6,1,0);w16(mem,0x380,1);w16(mem,0x382,5);w16(mem,0x384,20);w16(mem,0x386,30);w16(mem,0x388,300);w16(mem,0x38a,160);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,105,2,1,0);w16(mem,0x380,99);w16(mem,0x382,5);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
  /* stateful wind_set/wind_get: WF_CURRXYWH round-trip */
  apb(mem,105,6,1,0);w16(mem,0x380,2);w16(mem,0x382,5);w16(mem,0x384,25);w16(mem,0x386,35);w16(mem,0x388,280);w16(mem,0x38a,150);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,104,2,5,0);w16(mem,0x380,2);w16(mem,0x382,5);trap2(&c,mem);assert(r16(&c,0x3c0)==1);assert(r16(&c,0x3c2)==25&&r16(&c,0x3c4)==35&&r16(&c,0x3c6)==280&&r16(&c,0x3c8)==150);
- /* wind_get opcode 104: query current/work rectangle foundation */
- apb(mem,104,2,5,0);w16(mem,0x380,1);w16(mem,0x382,4);trap2(&c,mem);assert(r16(&c,0x3c0)==1);assert(r16(&c,0x3c2)==0&&r16(&c,0x3c4)==0&&r16(&c,0x3c6)==640&&r16(&c,0x3c8)==400);
+ /* wind_get opcode 104: query stored window rectangle */
+ apb(mem,104,2,5,0);w16(mem,0x380,1);w16(mem,0x382,4);trap2(&c,mem);assert(r16(&c,0x3c0)==1);assert(r16(&c,0x3c2)==20&&r16(&c,0x3c4)==30&&r16(&c,0x3c6)==300&&r16(&c,0x3c8)==160);
  /* wind_open opcode 101: accept allocated handles and reject unknown ones */
  apb(mem,101,5,1,0);w16(mem,0x380,1);w16(mem,0x382,10);w16(mem,0x384,20);w16(mem,0x386,320);w16(mem,0x388,180);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,101,5,1,0);w16(mem,0x380,99);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
  /* wind_close opcode 102: accept allocated handles and reject unknown ones */

@@ -70,6 +70,8 @@ int main(void) {
  key.ready=1;key.key=0x3062;m.x=123;m.y=77;m.buttons=1;m.kstate=4;apb(mem,25,16,7,0);w16(mem,0x380,0x0f);w16(mem,0x382,1);w16(mem,0x384,1);w16(mem,0x386,1);w16(mem,0x388,0);w16(mem,0x38a,100);w16(mem,0x38c,50);w16(mem,0x38e,50);w16(mem,0x390,50);w16(mem,0x392,0);w16(mem,0x394,100);w16(mem,0x396,50);w16(mem,0x398,50);w16(mem,0x39a,50);trap2(&c,mem);assert(r16(&c,0x3c0)==0x0f&&r16(&c,0x3ca)==0x3062&&r16(&c,0x3cc)==1);
  /* wind_create opcode 100: allocate stable non-zero AES window handles */
  apb(mem,100,5,1,0);w16(mem,0x380,0x000f);w16(mem,0x382,10);w16(mem,0x384,20);w16(mem,0x386,320);w16(mem,0x388,180);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,100,5,1,0);trap2(&c,mem);assert(r16(&c,0x3c0)==2);
+ /* wind_find opcode 106: locate an open window containing the point */
+ apb(mem,106,2,1,0);w16(mem,0x380,30);w16(mem,0x382,40);trap2(&c,mem);assert(r16(&c,0x3c0)==0);apb(mem,101,5,1,0);w16(mem,0x380,2);w16(mem,0x382,25);w16(mem,0x384,35);w16(mem,0x386,280);w16(mem,0x388,150);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,106,2,1,0);w16(mem,0x380,30);w16(mem,0x382,40);trap2(&c,mem);assert(r16(&c,0x3c0)==2);apb(mem,106,2,1,0);w16(mem,0x380,500);w16(mem,0x382,390);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
  /* wind_set opcode 105: accept allocated handle/current rectangle and reject unknown handle */
  apb(mem,105,6,1,0);w16(mem,0x380,1);w16(mem,0x382,5);w16(mem,0x384,20);w16(mem,0x386,30);w16(mem,0x388,300);w16(mem,0x38a,160);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,105,2,1,0);w16(mem,0x380,99);w16(mem,0x382,5);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
  /* stateful wind_set/wind_get: WF_CURRXYWH round-trip */

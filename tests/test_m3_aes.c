@@ -70,6 +70,8 @@ int main(void) {
  key.ready=1;key.key=0x3062;m.x=123;m.y=77;m.buttons=1;m.kstate=4;apb(mem,25,16,7,0);w16(mem,0x380,0x0f);w16(mem,0x382,1);w16(mem,0x384,1);w16(mem,0x386,1);w16(mem,0x388,0);w16(mem,0x38a,100);w16(mem,0x38c,50);w16(mem,0x38e,50);w16(mem,0x390,50);w16(mem,0x392,0);w16(mem,0x394,100);w16(mem,0x396,50);w16(mem,0x398,50);w16(mem,0x39a,50);trap2(&c,mem);assert(r16(&c,0x3c0)==0x0f&&r16(&c,0x3ca)==0x3062&&r16(&c,0x3cc)==1);
  /* wind_create opcode 100: allocate stable non-zero AES window handles */
  apb(mem,100,5,1,0);w16(mem,0x380,0x000f);w16(mem,0x382,10);w16(mem,0x384,20);w16(mem,0x386,320);w16(mem,0x388,180);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,100,5,1,0);trap2(&c,mem);assert(r16(&c,0x3c0)==2);
+ /* wind_open opcode 101: accept allocated handles and reject unknown ones */
+ apb(mem,101,5,1,0);w16(mem,0x380,1);w16(mem,0x382,10);w16(mem,0x384,20);w16(mem,0x386,320);w16(mem,0x388,180);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,101,5,1,0);w16(mem,0x380,99);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
  /* fsel_exinput opcode 91: extended selector accepts path, filename and title buffers */
  strcpy((char*)mem+0x680,"C:\\*.*");strcpy((char*)mem+0x6c0,"README.TXT");strcpy((char*)mem+0x700,"Open file");apb(mem,91,1,1,3);w16(mem,0x380,0);w32(mem,0x400,0x680);w32(mem,0x404,0x6c0);w32(mem,0x408,0x700);trap2(&c,mem);assert(r16(&c,0x3c0)==1);
  /* fsel_input opcode 90: host-neutral selector returns success without a UI backend */

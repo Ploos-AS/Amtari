@@ -88,6 +88,8 @@ int main(void) {
  apb(mem,102,1,1,0);w16(mem,0x380,1);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,102,1,1,0);w16(mem,0x380,99);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
  /* wind_delete opcode 103: accept allocated handles and reject unknown ones */
  apb(mem,103,1,1,0);w16(mem,0x380,1);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,103,1,1,0);w16(mem,0x380,99);trap2(&c,mem);assert(r16(&c,0x3c0)==0);
+ /* rsrc_load opcode 110: capture guest resource path and mark resource state loaded */
+ strcpy((char*)mem+0x740,"APP.RSC");apb(mem,110,0,1,1);w32(mem,0x400,0x740);trap2(&c,mem);assert(r16(&c,0x3c0)==1);assert(c.aes.resource_loaded&&!strcmp(c.aes.resource_path,"APP.RSC"));
  /* wind_new opcode 109: reset AES window state and handle allocation */
  apb(mem,109,0,1,0);trap2(&c,mem);assert(r16(&c,0x3c0)==1);apb(mem,104,2,5,0);w16(mem,0x380,2);w16(mem,0x382,5);trap2(&c,mem);assert(r16(&c,0x3c0)==0);apb(mem,100,5,1,0);w16(mem,0x380,0x000f);w16(mem,0x382,1);w16(mem,0x384,2);w16(mem,0x386,100);w16(mem,0x388,80);trap2(&c,mem);assert(r16(&c,0x3c0)==1);
  /* fsel_exinput opcode 91: extended selector accepts path, filename and title buffers */
